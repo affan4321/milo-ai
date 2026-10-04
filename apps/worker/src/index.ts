@@ -1,8 +1,8 @@
 import PgBoss from "pg-boss";
-import { Events, isPermanent } from "@milo/core";
+import { BOT_JOIN_QUEUE, BOT_QUEUE_OPTIONS, Events, isPermanent } from "@milo/core";
 import { getDb, calendarConnections } from "@milo/db";
 import { getProviders } from "@milo/providers";
-import { syncConnection } from "@milo/calendar";
+import { planBotJoins, reapStaleBotSessions, syncConnection } from "@milo/calendar";
 import { processMedia } from "@milo/media";
 import { transcribeRecording } from "@milo/transcription";
 import { generateInsights } from "@milo/intelligence";
@@ -80,5 +80,14 @@ await boss.work("calendar.tick", async () => {
 });
 await boss.work<{ connectionId: string }>("calendar.sync", async (jobs) => {
   for (const j of jobs) console.log(`[calendar] ${j.data.connectionId}`, await syncConnection(db, j.data.connectionId));
+});
+// bot scheduling: every minute, find meetings that need Milo and hand them to the bot; fail sessions whose bot went silent.
+await boss.createQueue(BOT_JOIN_QUEUE, { name: BOT_JOIN_QUEUE, ...BOT_QUEUE_OPTIONS } as never);
+await boss.createQueue("bot.tick");
+await boss.schedule("bot.tick", "* * * * *");
+await boss.work("bot.tick", async () => {
+  for (const job of await planBotJoins(db)) { await boss.send(BOT_JOIN_QUEUE, job, BOT_QUEUE_OPTIONS); console.log(`[bot] scheduled ${job.url}`); }
+  const reaped = await reapStaleBotSessions(db);
+  if (reaped) console.warn(`[bot] marked ${reaped} silent session(s) as failed`);
 });
 console.log("worker up");

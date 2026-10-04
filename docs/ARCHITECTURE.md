@@ -22,7 +22,7 @@ What `flows/` shows (22 screenshots): sign-up (Google / Microsoft), Google calen
 
 ### 1.1 Capture: a self-hosted bot, isolated in its own service
 
-- **Bot (primary).** A headless Chrome in a container opens the Meet link, joins as **"Milo Notetaker"**, asks to be admitted, posts a consent message in chat, and records the call's video and audio. It leaves when the call ends, it is removed, or it is alone.
+- **Bot (primary).** A headless Chrome in a container opens the Meet link, joins as **"Milo AI Notetaker"**, asks to be admitted, posts a consent message in chat, and records the call's video and audio. It leaves when the call ends, it is removed, or it is alone.
 - **While in the call the bot also reads the page:** live captions give real speaker names with timestamps (used to name diarized speakers), the participant list gives attendance, and the chat gives commands (see highlights).
 - **Scheduling.** The calendar module enqueues a join job shortly before each event that matches the user's auto-record rule. "Send Milo to a meeting" (paste a link) covers unscheduled calls.
 - **The bot will sometimes be blocked,** and the design assumes it: the host may never admit it, some Workspace orgs refuse guests, Google can flag automation (more often from cloud IPs), and a Meet page change can break the join script.
@@ -146,7 +146,7 @@ All time-based data is in milliseconds from recording start, so player, transcri
 | Step | What Milo does |
 | --- | --- |
 | Connect a calendar | Onboarding step 2: Google, or paste an ICS link. Home lists upcoming meetings with platform icon and a per-event record toggle. |
-| Notetaker into a real meeting | At start time the bot asks to join as "Milo Notetaker". Home shows its live state (joining, waiting to be admitted, recording). A consent message appears in the meeting chat. |
+| Notetaker into a real meeting | At start time the bot asks to join as "Milo AI Notetaker". Home shows its live state (joining, waiting to be admitted, recording). A consent message appears in the meeting chat. |
 | Let it record | Bot records until the call ends. The live meeting page in Milo shows a timer, participants and a Highlight button. |
 | Playback against transcript | Player left, transcript right. Active line follows playback; click a line to seek; speaker colours; speed control; chapters on the scrub bar. |
 | Summary, switch templates | Template picker (General, Sales discovery, 1:1, Standup, Customer call, User interview, Chronological, custom prompt). First view streams; later views are cached. Every bullet has a timestamp chip that seeks the player. |

@@ -1,11 +1,20 @@
-export interface SpeakerEvent { name: string; atMs: number }
-export interface ChatMessage { from: string; text: string; atMs: number }
+import type { BotFailReason } from "@milo/core";
 
-/** One implementation per platform (meet, zoom, teams). Recording, sidecar and upload are shared. */
+export type JoinResult = { admitted: true } | { admitted: false; reason: BotFailReason };
+export type EndReason = "ended" | "removed" | "alone" | "timeout";
+
+/**
+ * One implementation per platform (meet now; zoom and teams later). Recording, sidecar and upload are shared and live elsewhere.
+ * Times passed to callbacks are wall-clock epoch ms; the session converts them to the recording clock.
+ */
 export interface PlatformAdapter {
-  join(url: string, displayName: string): Promise<{ admitted: boolean; reason?: string }>;
-  postConsent(message: string): Promise<void>;
-  watchSpeakers(cb: (e: SpeakerEvent) => void): void;
-  watchChat(cb: (m: ChatMessage) => void): void;
-  detectEnd(): Promise<"ended" | "removed" | "alone">;
+  join(url: string, displayName: string, hooks: { onWaiting(): void }): Promise<JoinResult>;
+  /** Returns false when the platform won't take the message (chat disabled by the host). Never throws. */
+  postConsent(message: string): Promise<boolean>;
+  watchSpeakers(cb: (name: string, text: string, epochMs: number) => void): Promise<void>;
+  watchChat(cb: (from: string, text: string, epochMs: number) => void): Promise<void>;
+  watchParticipants(cb: (names: string[], epochMs: number) => void): Promise<void>;
+  detectEnd(o: { aloneGraceMs: number; aloneAtStartMs: number; maxMs: number }): Promise<EndReason>;
+  leave(): Promise<void>;
+  close(): Promise<void>;
 }

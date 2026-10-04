@@ -1,3 +1,17 @@
-{ "name": "@milo/bot", "version": "0.0.0", "private": true, "type": "module",
-  "scripts": { "dev": "tsx watch --env-file=../../.env src/index.ts", "typecheck": "tsc -p ." },
-  "dependencies": { "@milo/core": "workspace:*", "@milo/providers": "workspace:*" } }
+{
+  "name": "@milo/bot",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx --env-file=../../.env src/index.ts",
+    "login": "tsx --env-file=../../.env src/index.ts login",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@milo/core": "workspace:*",
+    "@milo/providers": "workspace:*",
+    "playwright-core": "^1.52.0",
+    "pg-boss": "^10.1.0"
+  }
+}

@@ -53,6 +53,7 @@ export function parseGoogleEvents(items: any[]): CalendarEventOut[] {
       externalId: String(ev.id), title: ev.summary || "(no title)",
       startsAt: new Date(ev.start.dateTime), endsAt: new Date(ev.end?.dateTime ?? ev.start.dateTime),
       attendees: (ev.attendees ?? []).filter((a: any) => a.email && !a.resource).map((a: any) => ({ email: a.email, ...(a.displayName ? { name: a.displayName } : {}) })),
+      organizerEmail: ev.organizer?.email ?? null,
       meetingUrl: link?.url ?? null, platform: link?.platform ?? "unknown",
     });
   }

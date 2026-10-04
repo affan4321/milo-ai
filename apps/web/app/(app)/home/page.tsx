@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
-import { getDb, calendarConnections, calendarEvents, meetings } from "@milo/db";
+import { BOT_ACTIVE_STATES } from "@milo/core";
+import { botCapacity } from "@milo/calendar";
+import { botStatusText } from "@/lib/bot-status";
+import { getDb, calendarConnections, calendarEvents, meetings, botSessions } from "@milo/db";
+import { AutoRefresh } from "../meetings/[id]/auto-refresh";
+import { SendMilo } from "./send-milo";
+import { RecordToggle } from "./record-toggle";
 import { UploadButton } from "./upload-button";
 import { getCurrentUser } from "@/lib/session";
 import { ConnectIcsForm } from "./connect-form";
@@ -19,11 +25,26 @@ export default async function Home() {
         .orderBy(asc(calendarEvents.startsAt)).limit(50)
     : [];
   const recent = await db.select().from(meetings).where(eq(meetings.ownerId, user.id)).orderBy(desc(meetings.createdAt)).limit(20);
+  const live = await db.select({ s: botSessions, title: meetings.title }).from(botSessions)
+    .innerJoin(meetings, eq(meetings.id, botSessions.meetingId))
+    .where(and(eq(meetings.ownerId, user.id), inArray(botSessions.state, [...BOT_ACTIVE_STATES]))).orderBy(desc(botSessions.createdAt));
+  const cap = live.length ? await botCapacity(db) : { alive: 0, busy: 0 };
   const failing = conns.find((c) => c.lastError);
   const lastSync = conns.map((c) => c.lastSyncedAt).filter(Boolean).sort().pop();
 
   return (
     <div className="max-w-3xl space-y-8">
+      {live.length > 0 && <AutoRefresh ms={3000} />}
+      {live.length > 0 && (
+        <section className="space-y-2">
+          {live.map(({ s, title }) => (
+            <Link key={s.id} href={`/meetings/${s.meetingId}`} className="flex items-center justify-between rounded-lg border border-accent/50 bg-accent/10 p-4 hover:bg-accent/15">
+              <div><div className="font-medium">{title}</div><div className="text-sm text-muted">{botStatusText(s, cap)}</div></div>
+              <span className={`h-2.5 w-2.5 rounded-full ${s.state === "recording" ? "animate-pulse bg-red-500" : "bg-amber-500"}`} />
+            </Link>
+          ))}
+        </section>
+      )}
       {failing && (
         <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
           Calendar sync problem: {failing.lastError} Showing the last synced events.
@@ -52,15 +73,16 @@ export default async function Home() {
                   <div className="font-medium">{e.title}</div>
                   <div className="text-sm text-muted">{e.startsAt.toLocaleString()} · {label[e.platform as keyof typeof label] ?? label.unknown}</div>
                 </div>
-                {e.meetingUrl && <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted">Milo will record</span>}
+                {e.meetingUrl && e.platform === "meet" && <RecordToggle eventId={e.id} record={e.record} />}
+                {e.meetingUrl && e.platform !== "meet" && <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted" title="Milo can only join Google Meet calls so far">Meet only for now</span>}
               </li>
             ))}
           </ul>
         )}
       </section>
       <ConnectIcsForm />
-      <section className="flex gap-3">
-        <button className="rounded bg-accent px-4 py-2 text-sm font-medium text-white">Send Milo to a meeting</button>
+      <section className="flex flex-wrap items-start gap-3">
+        <SendMilo />
         <UploadButton />
       </section>
       {recent.length > 0 && (

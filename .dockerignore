@@ -1,0 +1,11 @@
+node_modules
+**/node_modules
+.git
+.data
+**/.next
+flows
+docs
+.agent-logs
+.claude
+.env
+*.log

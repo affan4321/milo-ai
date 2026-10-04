@@ -15,6 +15,11 @@ function attendeesOf(ev: any): { name?: string; email: string }[] {
   });
 }
 
+function organizerOf(ev: any): string | null {
+  const o = ev.organizer; const val = typeof o === "string" ? o : o?.val;
+  return typeof val === "string" && val.includes("@") ? val.replace(/^mailto:/i, "").trim() : null;
+}
+
 /** Pure parser: ICS text -> events starting inside [from, to], recurring events expanded. */
 export function parseIcs(text: string, from: Date, to: Date): CalendarEventOut[] {
   const out: CalendarEventOut[] = [];
@@ -24,7 +29,7 @@ export function parseIcs(text: string, from: Date, to: Date): CalendarEventOut[]
     const link = detectMeeting([asText(item.url), asText(item.location), asText(item.description), asText(item["GOOGLE-CONFERENCE"])].join(" "));
     const base = {
       title: asText(item.summary) || "(no title)", attendees: attendeesOf(item),
-      meetingUrl: link?.url ?? null, platform: link?.platform ?? ("unknown" as const),
+      organizerEmail: organizerOf(item), meetingUrl: link?.url ?? null, platform: link?.platform ?? ("unknown" as const),
     };
     const starts: { at: Date; key: string }[] = [];
     if (item.rrule) {

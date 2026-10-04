@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, asc, eq, or } from "drizzle-orm";
-import { formatMs } from "@milo/core";
-import { getDb, meetings, recordings, speakers, transcriptSegments, pipelineStage, summaries, actionItems, chapters, templates, preferences } from "@milo/db";
+import { BOT_ACTIVE_STATES, BOT_STATE_TEXT, botReasonText, formatMs, type BotState } from "@milo/core";
+import { botCapacity } from "@milo/calendar";
+import { botStatusText } from "@/lib/bot-status";
+import { getDb, botSessions, meetings, recordings, speakers, transcriptSegments, pipelineStage, summaries, actionItems, chapters, templates, preferences } from "@milo/db";
 import { BUILT_IN_TEMPLATES, DEFAULT_TEMPLATE } from "@milo/intelligence";
 import { getCurrentUser } from "@/lib/session";
 import { MeetingView } from "./meeting-view";
@@ -19,6 +21,11 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
   const [meeting] = await db.select().from(meetings).where(and(eq(meetings.id, id), eq(meetings.ownerId, user.id)));
   if (!meeting) notFound();
   const [rec] = await db.select().from(recordings).where(eq(recordings.meetingId, id));
+  const [bot] = await db.select().from(botSessions).where(eq(botSessions.meetingId, id));
+  const cap = bot && bot.state === "scheduled" ? await botCapacity(db) : { alive: 0, busy: 0 };
+  const botActive = !!bot && (BOT_ACTIVE_STATES as string[]).includes(bot.state);
+  // The bot has left but its recording hasn't arrived yet: nothing is "busy" in the pipeline, so keep refreshing until it lands.
+  const awaitingHandOver = !!bot && !rec && bot.state === "left";
   const stages = rec ? await db.select().from(pipelineStage).where(eq(pipelineStage.recordingId, rec.id)) : [];
   const stage = (s: string) => stages.find((x) => x.stage === s);
   const media = stage("media"), tr = stage("transcription"), ins = stage("intelligence");
@@ -57,7 +64,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="space-y-6">
-      {busy && <AutoRefresh />}
+      {(busy || botActive || awaitingHandOver) && <AutoRefresh ms={botActive || awaitingHandOver ? 3000 : 2000} />}
       <div>
         <Link href="/home" className="text-sm text-muted hover:text-text">← Home</Link>
         <h1 className="mt-1 text-2xl font-semibold">{meeting.title}</h1>
@@ -65,6 +72,23 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
           {meeting.createdAt.toLocaleString()}{rec?.durationMs ? ` · ${formatMs(rec.durationMs)}` : ""}{spk.length ? ` · ${spk.length} speakers` : ""}
         </p>
       </div>
+
+      {bot && !rec && (
+        <div className={`rounded-lg border p-5 text-sm ${bot.state === "failed" ? "border-red-500/40 bg-red-500/10" : "border-accent/40 bg-accent/10"}`}>
+          <div className="flex items-center gap-2 font-medium">
+            {botActive && <span className={`h-2.5 w-2.5 rounded-full ${bot.state === "recording" ? "animate-pulse bg-red-500" : "bg-amber-500"}`} />}
+            {bot.state === "failed" ? BOT_STATE_TEXT.failed : botStatusText(bot, cap)}
+          </div>
+          {bot.state === "failed" && (
+            <>
+              <p className="mt-2">{botReasonText(bot.reason)}</p>
+              <p className="mt-1 text-muted">Nothing was recorded. You can <Link href="/home" className="underline">upload a recording of this meeting</Link> instead.</p>
+            </>
+          )}
+          {bot.state === "left" && <p className="mt-2 text-muted">Processing the recording… this page updates when it's ready.</p>}
+          {bot.state === "waiting_room" && <p className="mt-2 text-muted">Ask the host to admit &ldquo;Milo AI Notetaker&rdquo; from the waiting room.</p>}
+        </div>
+      )}
 
       {media?.status === "failed" && failedCard(media, STAGE_LABEL.media!)}
       {media && media.status !== "done" && media.status !== "failed" && (

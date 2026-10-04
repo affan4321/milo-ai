@@ -37,7 +37,7 @@ export interface LlmProvider {
 
 export interface CalendarEventOut {
   externalId: string; title: string; startsAt: Date; endsAt: Date;
-  attendees: { name?: string; email: string }[]; meetingUrl: string | null; platform: Platform;
+  attendees: { name?: string; email: string }[]; organizerEmail?: string | null; meetingUrl: string | null; platform: Platform;
 }
 export interface CalendarProvider { listUpcoming(): Promise<CalendarEventOut[]> }
 

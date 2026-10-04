@@ -10,6 +10,40 @@ services:
     environment: { MINIO_ROOT_USER: minio, MINIO_ROOT_PASSWORD: minio12345 }
     ports: ["9000:9000", "9001:9001"]
     volumes: [miodata:/data]
+  # Meeting bot pool. Each replica is one bot (one meeting at a time) with its own copy of the signed-in profile.
+  #   docker compose up -d --scale bot=3 bot        (capacity ~ 1 CPU core + 1 GB RAM per concurrent meeting)
+  # Sign the bot's Google account in once with the `bot-login` service below (docs/bot.md).
+  bot:
+    image: milo-ai-bot:latest
+    build: { context: ., dockerfile: apps/bot/Dockerfile }
+    depends_on: [postgres]
+    environment: &botenv
+      DATABASE_URL: postgres://milo:milo@postgres:5432/milo
+      WEB_URL: ${BOT_WEB_URL:-http://host.docker.internal:3000}
+      BOT_TOKEN: ${BOT_TOKEN:-}
+      BOT_VNC_PASSWORD: ${BOT_VNC_PASSWORD:-}
+      BOT_DEBUG: ${BOT_DEBUG:-0}
+      BOT_JOIN_TIMEOUT_MS: ${BOT_JOIN_TIMEOUT_MS:-}
+      BOT_ALONE_GRACE_MS: ${BOT_ALONE_GRACE_MS:-}
+      BOT_ALONE_AT_START_MS: ${BOT_ALONE_AT_START_MS:-}
+      BOT_HEARTBEAT_MS: ${BOT_HEARTBEAT_MS:-}
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    shm_size: 1gb
+    volumes: ["botprofile:/profile:ro", "botdata:/data"]
+    restart: unless-stopped
+  # One-time sign-in of the bot's Google account over VNC (localhost only). Run: docker compose run --rm --service-ports bot-login
+  bot-login:
+    image: milo-ai-bot:latest
+    build: { context: ., dockerfile: apps/bot/Dockerfile }
+    profiles: ["login"]
+    command: ["login"]
+    environment: *botenv
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    shm_size: 1gb
+    ports: ["127.0.0.1:5900:5900"]
+    volumes: ["botprofile:/profile"]
 volumes:
+  botprofile:
+  botdata:
   pgdata:
   miodata:

@@ -23,10 +23,10 @@ export async function syncConnection(db: Db, connectionId: string, provider?: Ca
     for (const e of events) {
       await db.insert(calendarEvents).values({
         connectionId, externalId: e.externalId, title: e.title, startsAt: e.startsAt, endsAt: e.endsAt,
-        attendees: e.attendees, meetingUrl: e.meetingUrl, platform: e.platform,
+        attendees: e.attendees, organizerEmail: e.organizerEmail ?? null, meetingUrl: e.meetingUrl, platform: e.platform,
       }).onConflictDoUpdate({
         target: [calendarEvents.connectionId, calendarEvents.externalId],
-        set: { title: e.title, startsAt: e.startsAt, endsAt: e.endsAt, attendees: e.attendees, meetingUrl: e.meetingUrl, platform: e.platform },
+        set: { title: e.title, startsAt: e.startsAt, endsAt: e.endsAt, attendees: e.attendees, organizerEmail: e.organizerEmail ?? null, meetingUrl: e.meetingUrl, platform: e.platform },
       });
     }
     await db.update(calendarConnections).set({ lastSyncedAt: new Date(), lastError: null }).where(eq(calendarConnections.id, connectionId));
@@ -56,3 +56,4 @@ export async function saveGoogleConnection(db: Db, userId: string, refreshToken:
   if (!refreshToken) return null;
   return (await db.insert(calendarConnections).values({ userId, kind: "google", refreshToken }).returning())[0]!.id;
 }
+export * from "./bot";

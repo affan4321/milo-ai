@@ -1,0 +1,10 @@
+# Dev override: run the bot from your working copy instead of the code baked into the image.
+#   docker compose -f docker-compose.yml -f docker-compose.bot-dev.yml up -d bot
+services:
+  bot:
+    volumes:
+      - botprofile:/profile:ro
+      - botdata:/data
+      - ./apps/bot/src:/app/apps/bot/src:ro
+      - ./packages/core/src:/app/packages/core/src:ro
+      - ./packages/providers/src:/app/packages/providers/src:ro

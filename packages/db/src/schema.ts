@@ -45,6 +45,7 @@ export const calendarEvents = pgTable("calendar_events", {
   startsAt: timestamp("starts_at", { withTimezone: true }).notNull(), endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
   attendees: jsonb("attendees").$type<{ name?: string; email: string }[]>().notNull().default([]),
   meetingUrl: text("meeting_url"), platform: text("platform").notNull().default("unknown"),
+  organizerEmail: text("organizer_email"),
   record: boolean("record").notNull().default(true),
 }, (t) => [uniqueIndex("cal_events_uq").on(t.connectionId, t.externalId)]);
 
@@ -61,6 +62,14 @@ export const botSessions = pgTable("bot_sessions", {
   id: id(), meetingId: ref("meeting_id").references(() => meetings.id, { onDelete: "cascade" }),
   state: text("state").notNull().default("scheduled"), reason: text("reason"),
   startedAt: timestamp("started_at", { withTimezone: true }),
+  meetingUrl: text("meeting_url").notNull().default(""), platform: text("platform").notNull().default("unknown"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+/** One row per running bot container. They report in every few seconds so the app can tell "all busy" from "none running". */
+export const botWorkers = pgTable("bot_workers", {
+  id: text("id").primaryKey(), busy: boolean("busy").notNull().default(false),
+  sessionId: uuid("session_id"), lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export const recordings = pgTable("recordings", {
   id: id(), meetingId: ref("meeting_id").references(() => meetings.id, { onDelete: "cascade" }),
