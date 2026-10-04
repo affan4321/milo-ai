@@ -32,7 +32,7 @@ export async function PUT(req: Request) {
     return Response.json({ error: e instanceof Error ? e.message : "Upload failed." }, { status: 500 });
   }
   const [rec] = await db.insert(recordings).values({ meetingId: meeting!.id, rawKey: key }).returning();
-  await ensureStages(db, rec!.id, ["media", "transcription"]);
+  await ensureStages(db, rec!.id, ["media", "transcription", "intelligence"]);
   await enqueue(Events.RecordingUploaded, { recordingId: rec!.id });
   return Response.json({ meetingId: meeting!.id });
 }

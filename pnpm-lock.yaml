@@ -38,6 +38,9 @@ importers:
       '@milo/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@milo/intelligence':
+        specifier: workspace:*
+        version: link:../../packages/modules/intelligence
       '@milo/providers':
         specifier: workspace:*
         version: link:../../packages/providers
@@ -84,6 +87,9 @@ importers:
       '@milo/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@milo/intelligence':
+        specifier: workspace:*
+        version: link:../../packages/modules/intelligence
       '@milo/media':
         specifier: workspace:*
         version: link:../../packages/modules/media
@@ -119,6 +125,21 @@ importers:
         version: 0.28.1
 
   packages/modules/calendar:
+    dependencies:
+      '@milo/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@milo/db':
+        specifier: workspace:*
+        version: link:../../db
+      '@milo/providers':
+        specifier: workspace:*
+        version: link:../../providers
+      drizzle-orm:
+        specifier: ^0.36.0
+        version: 0.36.4(@types/react@19.3.0)(pg@8.23.1)(postgres@3.4.9)(react@19.3.0)
+
+  packages/modules/intelligence:
     dependencies:
       '@milo/core':
         specifier: workspace:*

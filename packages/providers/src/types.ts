@@ -25,8 +25,12 @@ export interface InsightsOut {
   actionItems: { text: string; assignee?: string; sourceMs?: number }[];
   chapters: { title: string; startMs: number }[];
 }
+export interface LlmInput { transcript: string; templatePrompt: string; durationMs: number }
 export interface LlmProvider {
-  insights(args: { transcript: string; templatePrompt: string }): Promise<InsightsOut>;
+  /** Summary + action items + chapters in one call. `transcript` lines look like "[t=754] Name: text" (t = seconds). */
+  insights(args: LlmInput): Promise<InsightsOut>;
+  /** Summary only, for switching templates after the first pass. */
+  summarize(args: LlmInput): Promise<SummaryOut>;
   embed(texts: string[]): Promise<number[][]>;
   answer(args: { question: string; context: { id: string; text: string; ms: number }[] }): Promise<{ text: string; citedIds: string[] }>;
 }

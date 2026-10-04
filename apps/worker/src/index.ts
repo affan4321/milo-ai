@@ -5,6 +5,7 @@ import { getProviders } from "@milo/providers";
 import { syncConnection } from "@milo/calendar";
 import { processMedia } from "@milo/media";
 import { transcribeRecording } from "@milo/transcription";
+import { generateInsights } from "@milo/intelligence";
 
 const boss = new PgBoss(process.env.DATABASE_URL ?? "postgres://milo:milo@localhost:5433/milo");
 boss.on("error", (e) => console.error("[boss]", e));
@@ -49,10 +50,23 @@ await boss.work<RecordingJob>(Events.MediaReady, async (jobs) => {
   }
 });
 
-await queue(Events.TranscriptReady);
-await boss.work(Events.TranscriptReady, async (jobs) => {
-  for (const j of jobs) console.log(`[worker] ${Events.TranscriptReady} (no consumer yet)`, j.id);
+// intelligence: LLM calls are serialized (one job at a time, polled every 5s) and retried with a long backoff,
+// which keeps free-tier per-minute limits from failing recordings.
+await boss.createQueue(Events.TranscriptReady, { name: Events.TranscriptReady, retryLimit: 5, retryBackoff: true, retryDelay: 60 });
+await boss.work<RecordingJob>(Events.TranscriptReady, { batchSize: 1, pollingIntervalSeconds: 5 }, async (jobs) => {
+  for (const j of jobs) {
+    try {
+      const r = await generateInsights(db, providers.llm, j.data.recordingId);
+      console.log(`[intelligence] ${j.data.recordingId} ${r.actionItems} action items, ${r.chapters} chapters`);
+      await boss.send(Events.InsightsReady, j.data);
+    } catch (e) {
+      if (isPermanent(e)) { console.warn(`[intelligence] ${j.data.recordingId} failed permanently: ${e.message}`); continue; }
+      throw e;
+    }
+  }
 });
+await queue(Events.InsightsReady);
+await boss.work(Events.InsightsReady, async (jobs) => { for (const j of jobs) console.log(`[worker] ${Events.InsightsReady} (no consumer yet)`, j.id); });
 
 // calendar: a tick fans out one job per connection.
 await queue("calendar.sync");

@@ -17,7 +17,8 @@
     "next-auth": "5.0.0-beta.32",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "pg-boss": "^10.1.0"
+    "pg-boss": "^10.1.0",
+    "@milo/intelligence": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",

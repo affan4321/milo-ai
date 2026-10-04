@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, or } from "drizzle-orm";
 import { formatMs } from "@milo/core";
-import { getDb, meetings, recordings, speakers, transcriptSegments, pipelineStage } from "@milo/db";
+import { getDb, meetings, recordings, speakers, transcriptSegments, pipelineStage, summaries, actionItems, chapters, templates, preferences } from "@milo/db";
+import { BUILT_IN_TEMPLATES, DEFAULT_TEMPLATE } from "@milo/intelligence";
 import { getCurrentUser } from "@/lib/session";
 import { MeetingView } from "./meeting-view";
 import { AutoRefresh } from "./auto-refresh";
@@ -20,7 +21,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
   const [rec] = await db.select().from(recordings).where(eq(recordings.meetingId, id));
   const stages = rec ? await db.select().from(pipelineStage).where(eq(pipelineStage.recordingId, rec.id)) : [];
   const stage = (s: string) => stages.find((x) => x.stage === s);
-  const media = stage("media"), tr = stage("transcription");
+  const media = stage("media"), tr = stage("transcription"), ins = stage("intelligence");
   const busy = stages.some((s) => s.status === "pending" || s.status === "running");
 
   const playable = media?.status === "done" && rec?.playableKey;
@@ -32,6 +33,17 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
           .from(transcriptSegments).where(eq(transcriptSegments.meetingId, id)).orderBy(asc(transcriptSegments.startMs)),
       ])
     : [[], []];
+
+  const [prefs] = await db.select().from(preferences).where(eq(preferences.userId, user.id));
+  const [sums, items, chs, custom] = transcriptReady
+    ? await Promise.all([
+        db.select().from(summaries).where(eq(summaries.meetingId, id)),
+        db.select().from(actionItems).where(eq(actionItems.meetingId, id)),
+        db.select().from(chapters).where(eq(chapters.meetingId, id)).orderBy(asc(chapters.startMs)),
+        db.select().from(templates).where(and(eq(templates.builtIn, false), or(eq(templates.ownerId, user.id)))),
+      ])
+    : [[], [], [], []];
+  const templateOpts = [...BUILT_IN_TEMPLATES.map((t) => ({ key: t.key, name: t.name })), ...custom.map((t) => ({ key: t.key, name: t.name }))];
 
   const failedCard = (s: typeof media, title: string) => s && (
     <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm">
@@ -62,7 +74,11 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
       {playable && transcriptReady && (
         <MeetingView meetingId={id} mediaUrl={`/api/media/${rec!.id}`} isVideo={rec!.playableKey!.endsWith(".mp4")}
           speakers={spk.map((s) => ({ id: s.id, name: s.displayName ?? s.label, talkTimeMs: s.talkTimeMs })).sort((a, b) => b.talkTimeMs - a.talkTimeMs)}
-          segments={segs.map((s) => ({ ...s, speakerId: s.speakerId ?? "" }))} />
+          segments={segs.map((s) => ({ ...s, speakerId: s.speakerId ?? "" }))}
+          chapters={chs.map((c) => ({ id: c.id, title: c.title, startMs: c.startMs }))}
+          actionItems={items.map((a) => ({ id: a.id, text: a.text, assignee: a.assignee, done: a.done, sourceMs: a.sourceMs })).sort((a, b) => (a.sourceMs ?? 0) - (b.sourceMs ?? 0))}
+          templates={templateOpts} summaries={Object.fromEntries(sums.map((x) => [x.templateKey, x.content]))}
+          defaultTemplate={prefs?.defaultTemplate ?? DEFAULT_TEMPLATE} insights={ins ? { status: ins.status, error: ins.error } : null} />
       )}
 
       {playable && !transcriptReady && (

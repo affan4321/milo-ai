@@ -32,16 +32,30 @@ export class FakeStt implements SttProvider {
   }
 }
 
+/** Deterministic fake: derives bullets, chapters and action items from the transcript itself, so it behaves sensibly at any length. */
 export class FakeLlm implements LlmProvider {
-  async insights() {
+  private lines(transcript: string) {
+    return transcript.split("\n").flatMap((l) => {
+      const m = /^\[t=(\d+)\] ([^:]+): (.*)$/.exec(l);
+      return m ? [{ t: Number(m[1]), who: m[2]!, text: m[3]! }] : [];
+    });
+  }
+  async summarize(i: { transcript: string; durationMs: number }) {
+    const lines = this.lines(i.transcript);
+    const pick = (n: number) => Array.from({ length: Math.min(n, lines.length) }, (_, k) => lines[Math.floor((k * lines.length) / Math.min(n, lines.length))]!);
     return {
-      summary: { sections: [
-        { heading: "Overview", bullets: [{ text: "Roadmap kickoff; pricing deferred to next week.", ms: 0 }] },
-        { heading: "Decisions", bullets: [{ text: "Calendar integration ships Friday.", ms: 8000 }] },
-      ] },
-      actionItems: [{ text: "Ship calendar integration", assignee: "Speaker 2", sourceMs: 8000 }],
-      chapters: [{ title: "Roadmap", startMs: 0 }, { title: "Pricing", startMs: 16000 }],
+      sections: [
+        { heading: "Overview", bullets: pick(3).map((l) => ({ text: `${l.who}: ${l.text}`, ms: l.t * 1000 })) },
+        { heading: "Key moments", bullets: pick(6).slice(1).map((l) => ({ text: l.text, ms: l.t * 1000 })) },
+      ],
     };
+  }
+  async insights(i: { transcript: string; templatePrompt: string; durationMs: number }) {
+    const lines = this.lines(i.transcript);
+    const n = Math.max(1, Math.min(8, Math.ceil(i.durationMs / 300_000)));
+    const chapters = Array.from({ length: n }, (_, k) => ({ title: `Topic ${k + 1}`, startMs: Math.floor((k * i.durationMs) / n) }));
+    const actionItems = lines.filter((l) => /\bI'll\b|\bwill\b/i.test(l.text)).slice(0, 8).map((l) => ({ text: l.text, assignee: l.who, sourceMs: l.t * 1000 }));
+    return { summary: await this.summarize(i), actionItems, chapters };
   }
   async embed(texts: string[]) { return texts.map(() => new Array(768).fill(0)); }
   async answer() { return { text: "This is a fake answer.", citedIds: [] }; }

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { getDb, preferences, workspaces, memberships } from "@milo/db";
 import { getCurrentUser } from "@/lib/session";
+import { templateForRole } from "@milo/intelligence";
 import { JOB_FUNCTIONS, validatePreferences } from "@/lib/onboarding";
 
 const patch = async (userId: string, set: Partial<typeof preferences.$inferInsert>) => {
@@ -46,6 +47,6 @@ export async function saveRoleAction(form: FormData) {
   const user = await getCurrentUser();
   const role = String(form.get("role"));
   if (!(JOB_FUNCTIONS as readonly string[]).includes(role)) redirect("/onboarding/role");
-  await patch(user.id, { jobFunction: role, onboarded: true });
+  await patch(user.id, { jobFunction: role, defaultTemplate: templateForRole(role), onboarded: true });
   redirect("/home");
 }
