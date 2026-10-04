@@ -1,0 +1,14 @@
+import { isPersonalEmail, validatePreferences, nextStep } from "./onboarding";
+const eq = (a: unknown, b: unknown, m: string) => { if (a !== b) { console.error("FAIL", m, a, b); process.exit(1); } };
+eq(isPersonalEmail("a@Gmail.com"), true, "gmail personal");
+eq(isPersonalEmail("a@acme.io"), false, "work email");
+eq(validatePreferences({ record: "all", share: "attendees", consent: false }) !== null, true, "consent required");
+eq(validatePreferences({ record: "none", share: "none", consent: false }), null, "no consent needed when nothing recorded");
+eq(validatePreferences({ record: "bogus", share: "none", consent: true }) !== null, true, "bad rule");
+const base = { email: "a@acme.io", accountChosen: false, calendarDone: false, prefsDone: false, jobFunction: null };
+eq(nextStep(base), "calendar", "work email skips account step");
+eq(nextStep({ ...base, email: "a@gmail.com" }), "account", "personal email asked");
+eq(nextStep({ ...base, calendarDone: true }), "preferences", "then prefs");
+eq(nextStep({ ...base, calendarDone: true, prefsDone: true }), "role", "then role");
+eq(nextStep({ ...base, calendarDone: true, prefsDone: true, jobFunction: "Sales" }), "done", "done");
+console.log("ok");

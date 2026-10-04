@@ -1,0 +1,22 @@
+/** Pipeline events, in order. Modules communicate only through these and the DB. */
+export const Events = {
+  BotJoinRequested: "bot.join.requested",
+  RecordingUploaded: "recording.uploaded",
+  MediaReady: "media.ready",
+  TranscriptReady: "transcript.ready",
+  InsightsReady: "insights.ready",
+  IndexReady: "index.ready",
+  RecapSent: "recap.sent",
+} as const;
+export type EventName = (typeof Events)[keyof typeof Events];
+
+export const PipelineStages = ["media", "transcription", "intelligence", "indexing", "notify"] as const;
+export type PipelineStage = (typeof PipelineStages)[number];
+export type StageStatus = "pending" | "running" | "done" | "failed";
+
+export type Platform = "meet" | "zoom" | "teams" | "unknown";
+export type CaptureSource = "bot" | "browser" | "upload";
+export type BotState = "scheduled" | "joining" | "waiting_room" | "recording" | "left" | "failed";
+
+export interface RecordingUploadedPayload { meetingId: string; recordingId: string }
+export interface MeetingPayload { meetingId: string }

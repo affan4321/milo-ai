@@ -1,0 +1,18 @@
+{
+  "name": "milo-ai",
+  "private": true,
+  "packageManager": "pnpm@10.30.3",
+  "scripts": {
+    "dev:web": "pnpm --filter @milo/web dev",
+    "dev:worker": "pnpm --filter @milo/worker dev",
+    "dev:bot": "pnpm --filter @milo/bot dev",
+    "db:generate": "pnpm --filter @milo/db generate",
+    "db:migrate": "pnpm --filter @milo/db migrate",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0"
+  }
+}

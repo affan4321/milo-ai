@@ -1,0 +1,1 @@
+ALTER TABLE "preferences" ADD COLUMN "prefs_step_done" boolean DEFAULT false NOT NULL;

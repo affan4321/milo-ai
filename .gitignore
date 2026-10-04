@@ -2,3 +2,8 @@
 .claude/hooks/.capture-state/
 .claude/settings.local.json
 flows/
+node_modules/
+.next/
+dist/
+.env
+*.tsbuildinfo
