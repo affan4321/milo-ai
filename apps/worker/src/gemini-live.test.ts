@@ -1,3 +1,4 @@
+// WARNING: spends real Gemini requests (free tier: ~20/day per model). Run deliberately, never in a loop.
 // Live check against the real Gemini API with a short synthetic transcript. Run: npx tsx --env-file=.env apps/worker/src/gemini-live.test.ts
 import { GeminiLlm } from "@milo/providers";
 import { BUILT_IN_TEMPLATES } from "@milo/intelligence";

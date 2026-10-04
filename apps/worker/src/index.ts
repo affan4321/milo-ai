@@ -36,7 +36,8 @@ await boss.work<RecordingJob>(Events.RecordingUploaded, async (jobs) => {
   }
 });
 
-await queue(Events.MediaReady);
+// Transcription of a long recording takes minutes; pg-boss would otherwise expire (and re-run) the job after 15 minutes.
+await boss.createQueue(Events.MediaReady, { name: Events.MediaReady, retryLimit: 3, retryBackoff: true, retryDelay: 30, expireInSeconds: 3600 });
 await boss.work<RecordingJob>(Events.MediaReady, async (jobs) => {
   for (const j of jobs) {
     try {

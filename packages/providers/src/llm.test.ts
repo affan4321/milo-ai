@@ -1,4 +1,4 @@
-import { isPermanent } from "@milo/core";
+import { DailyQuotaError, isPermanent } from "@milo/core";
 import { GeminiLlm } from "./llm/gemini";
 import { extractJson, normalizeInsights } from "./llm/normalize";
 
@@ -40,5 +40,23 @@ e = await new GeminiLlm({ apiKey: "", fetch: ok(good) }).insights(input).catch((
 let seen: any; await new GeminiLlm({ apiKey: "SECRETKEY", model: "m1", fetch: (async (u: string, init: any) => { seen = { u, init }; return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(good) }] } }] })); }) as any }).insights(input);
 check(!seen.u.includes("SECRETKEY") && seen.init.headers["x-goog-api-key"] === "SECRETKEY" && seen.u.includes("/models/m1:"), "key in header, model in URL");
 check(JSON.parse(seen.init.body).generationConfig.responseMimeType === "application/json", "JSON mode requested");
+
+// daily quota: shaped like the real free-tier 429 body. Not retryable in seconds, so permanent for this run; per-minute 429s stay transient.
+const dailyBody = { error: { status: "RESOURCE_EXHAUSTED", message: "You exceeded your current quota", details: [{ "@type": "type.googleapis.com/google.rpc.QuotaFailure", violations: [{ quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier", quotaValue: "20" }] }, { "@type": "type.googleapis.com/google.rpc.RetryInfo", retryDelay: "18184s" }] } };
+const minuteBody = { error: { status: "RESOURCE_EXHAUSTED", message: "slow down", details: [{ violations: [{ quotaId: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier" }] }] } };
+e = await err(reply(429, dailyBody)); check(e instanceof DailyQuotaError && isPermanent(e) && /resets in about 5 h/.test((e as Error).message) && (e as DailyQuotaError).retryAfterSec === 18184, "daily quota -> DailyQuotaError with reset time");
+e = await err(reply(429, minuteBody)); check(e && !isPermanent(e), "per-minute 429 stays retryable");
+
+// fallback: first model out of daily quota -> second model answers; the request URL shows which model was used
+const urls: string[] = [];
+const fb = new GeminiLlm({ apiKey: "k", model: "primary", fallbackModels: ["backup"], fetch: (async (u: string) => { urls.push(u); return u.includes("/primary:") ? new Response(JSON.stringify(dailyBody), { status: 429 }) : new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(good) }] } }] })); }) as any });
+r = await fb.insights(input);
+check(urls.length === 2 && urls[0]!.includes("/primary:") && urls[1]!.includes("/backup:") && r.chapters.length === 1, "falls back to the next model on daily quota");
+const allOut = new GeminiLlm({ apiKey: "k", model: "a", fallbackModels: ["b"], fetch: reply(429, dailyBody) });
+e = await allOut.insights(input).catch((x) => x); check(e instanceof DailyQuotaError && /all configured models \(a, b\)/.test((e as Error).message), "all models exhausted -> clear error naming them");
+// a non-quota error on the primary does NOT trigger fallback
+urls.length = 0;
+const nf = new GeminiLlm({ apiKey: "k", model: "primary", fallbackModels: ["backup"], fetch: (async (u: string) => { urls.push(u); return new Response("{}", { status: 503 }); }) as any });
+e = await nf.insights(input).catch((x) => x); check(e && urls.length === 1, "503 does not burn the fallback model's quota");
 
 console.log(fails ? `${fails} FAILED` : "ok"); process.exit(fails ? 1 : 0);

@@ -26,3 +26,8 @@ export class PermanentError extends Error {
   readonly permanent = true;
 }
 export const isPermanent = (e: unknown): e is PermanentError => !!e && typeof e === "object" && (e as PermanentError).permanent === true;
+
+/** The provider's daily quota for a model is used up. Retrying now cannot help, so it is permanent for this run; `retryAfterSec` says when it resets. */
+export class DailyQuotaError extends PermanentError {
+  constructor(message: string, readonly model: string, readonly retryAfterSec?: number) { super(message); }
+}
