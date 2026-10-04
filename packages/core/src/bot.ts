@@ -40,8 +40,13 @@ export interface Sidecar {
   /** Wall-clock epoch ms of recording time 0. */
   recordingStartedAtMs: number;
   participants: { name: string; joinedMs: number; leftMs: number | null }[];
-  /** Who was speaking when, from live captions (Meet) or the active-speaker indicator (Zoom). */
+  /**
+   * "<name> was speaking at <atMs>" observations, from live captions (Meet) or the active-speaker indicator (Zoom).
+   * Emitted repeatedly while someone talks (about every 1.5 s), so each observation is read as covering a few seconds around it.
+   */
   speakerEvents: { name: string; atMs: number }[];
+  /** Largest participant count seen, INCLUDING the bot. 2 means the bot plus exactly one other person. */
+  peakParticipants?: number;
   captions: { name: string; text: string; atMs: number }[];
   chat: { from: string; text: string; atMs: number }[];
   endedBy: "ended" | "removed" | "alone" | "timeout" | "error";

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { BotFailReason, BotJob } from "@milo/core";
-import { api as realApi } from "./api";
+import { api as realApi, HttpError } from "./api";
 import { config } from "./config";
 import { MeetAdapter } from "./platforms/meet";
 import type { EndReason, PlatformAdapter } from "./platforms/types";
@@ -56,7 +56,7 @@ export async function runSession(job: BotJob, d: Deps = defaultDeps): Promise<Ou
         await adapter.watchChat((f, t, at) => side.chat(f, t, at)).catch((e) => console.warn(`${tag} chat unavailable:`, e?.message ?? e));
         await adapter.watchParticipants((ns, at) => side.participants(ns, at)).catch(() => {});
         endedBy = await Promise.race([
-          adapter.detectEnd({ aloneGraceMs: d.cfg.aloneGraceMs, aloneAtStartMs: d.cfg.aloneAtStartMs, maxMs: d.cfg.maxMeetingMs }),
+          adapter.detectEnd({ aloneGraceMs: d.cfg.aloneGraceMs, aloneAtStartMs: d.cfg.aloneAtStartMs, maxMs: d.cfg.maxMeetingMs, onCount: (n, at) => side.count(n, at) }),
           rec.died.then(() => "error" as const),
         ]);
         if (endedBy === "error") failure = "recording_error";
@@ -101,6 +101,8 @@ async function handOver(id: string, dir: string, d: Deps, tag: string): Promise<
     console.log(`${tag} handed over`);
     return true;
   } catch (e) {
+    // 404 means the web app no longer knows this session (meeting deleted): retrying can never succeed, so drop the files.
+    if (e instanceof HttpError && e.status === 404) { fs.rmSync(dir, { recursive: true, force: true }); console.warn(`${tag} session no longer exists; discarded the recording`); return false; }
     console.error(`${tag} hand-over failed, keeping files for retry:`, e instanceof Error ? e.message : e);
     return false;
   }

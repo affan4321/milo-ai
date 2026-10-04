@@ -42,6 +42,8 @@ try {
   console.log("A. admitted, talks, ends -> full pipeline");
   const A = await start("e2e-happy");
   await until("waiting room reported", async () => (await A.session()).state === "waiting_room");
+  await sleep(5000); // the waiting room has a "Leave call" button just like a real call: the bot must NOT start recording until admitted
+  check((await A.session()).state === "waiting_room" && (await A.meeting()).status !== "recording", "still in the waiting room after 5s: not recording yet");
   check((await room("e2e-happy")).state === "waiting" && (await room("e2e-happy")).joinedAs === "Milo AI Notetaker", "bot asked to join under the name 'Milo AI Notetaker'");
   await control("e2e-happy", { do: "admit" });
   await until("recording reported", async () => (await A.session()).state === "recording");
@@ -53,8 +55,11 @@ try {
   for (const [name, text] of script) { await control("e2e-happy", { do: "caption", name, text }); await sleep(6500); }
   await control("e2e-happy", { do: "chat", from: "Ada", text: "/milo highlight" });
   await sleep(1500);
+  const endedAt = Date.now();
   await control("e2e-happy", { do: "end" });
   await until("session left", async () => (await A.session()).state === "left", 60_000);
+  const leaveSecs = (Date.now() - endedAt) / 1000;
+  check(leaveSecs < 12, `bot notices the call ended and leaves quickly (${leaveSecs.toFixed(1)}s)`);
   const meetingA = await until("meeting processed", async () => { const x = await A.meeting(); return x.status === "ready" ? x : x.status === "failed" ? (() => { throw new Error("meeting failed"); })() : undefined; }, 180_000, 2000);
   const [rec] = await db.select().from(recordings).where(eq(recordings.meetingId, A.m.id));
   check(!!rec?.sidecarKey && (rec.durationMs ?? 0) > 20_000, `recording stored with sidecar, ${Math.round((rec?.durationMs ?? 0) / 1000)}s`);
@@ -86,6 +91,30 @@ try {
   await until("partial recording processed", async () => (await B.meeting()).status === "ready", 180_000, 2000);
   const [recB] = await db.select().from(recordings).where(eq(recordings.meetingId, B.m.id));
   check((recB?.durationMs ?? 0) > 12_000, `partial recording kept (${Math.round((recB?.durationMs ?? 0) / 1000)}s)`);
+
+  // ---------------- E. one other person talking: every speaker label must become that person ----------------
+  console.log("E. bot + one person (the real-call 'Speaker 1' regression)");
+  await control("e2e-solo", { do: "reset" }); await control("e2e-solo", { do: "mode", mode: "nowait" }); await control("e2e-solo", { do: "others", count: 1 });
+  const E = await start("e2e-solo", "nowait"); await control("e2e-solo", { do: "others", count: 1 });
+  await until("recording", async () => (await E.session()).state === "recording");
+  for (let i = 0; i < 7; i++) { await control("e2e-solo", { do: "caption", name: "Ada", text: `this is sentence number ${i} said by one person` }); await sleep(3200); }
+  await control("e2e-solo", { do: "end" });
+  await until("session left", async () => (await E.session()).state === "left", 60_000);
+  await until("processed", async () => (await E.meeting()).status === "ready", 180_000, 2000);
+  const spE = (await db.select().from(speakers).where(eq(speakers.meetingId, E.m.id))).map((x) => x.label);
+  check(spE.length === 1 && spE[0] === "Ada", `a one-person call has exactly one speaker, named (got: ${spE.join(", ")})`);
+
+  // ---------------- F. everyone else leaves: the bot must follow within seconds ----------------
+  console.log("F. last person leaves -> bot leaves promptly");
+  await control("e2e-alone", { do: "reset" }); await control("e2e-alone", { do: "mode", mode: "nowait" });
+  const F = await start("e2e-alone", "nowait"); await control("e2e-alone", { do: "others", count: 2 });
+  await until("recording", async () => (await F.session()).state === "recording");
+  await sleep(14_000);                                   // long enough to be a real recording, and for the bot to see others present
+  const goneAt = Date.now();
+  await control("e2e-alone", { do: "others", count: 0 });  // everyone else leaves; the call itself keeps going
+  await until("bot leaves on its own", async () => (await F.session()).state === "left", 60_000);
+  const aloneSecs = (Date.now() - goneAt) / 1000;
+  check(aloneSecs < 30, `bot left ${aloneSecs.toFixed(1)}s after the last person left (grace 15s + a few seconds)`);
 
   // ---------------- C. refusals ----------------
   for (const [code, mode, reason] of [["e2e-denied", "denied", "denied"], ["e2e-blocked", "blocked", "guests_blocked"], ["e2e-captcha", "captcha", "captcha"]] as const) {

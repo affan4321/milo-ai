@@ -12,6 +12,7 @@ export class MeetAdapter implements PlatformAdapter {
   private ctx?: BrowserContext;
   private page?: Page;
   private everSawOthers = false;
+  private lastText = "";
 
   // ---------- browser ----------
   private async launch(): Promise<Page> {
@@ -24,6 +25,8 @@ export class MeetAdapter implements PlatformAdapter {
       locale: "en-US",
     });
     // tsx/esbuild wraps named functions in a __name() helper; functions we send into the page need it defined there too.
+    // Anything that isn't present should fail in seconds, never block for Playwright's 30 s default.
+    this.ctx.setDefaultTimeout(5000);
     await this.ctx.addInitScript("window.__name = window.__name || ((f) => f);");
     await this.ctx.grantPermissions(["microphone", "camera"]).catch(() => {});
     this.page = this.ctx.pages()[0] ?? (await this.ctx.newPage());
@@ -38,6 +41,10 @@ export class MeetAdapter implements PlatformAdapter {
       const dir = path.join(config.dataDir, "debug"); fs.mkdirSync(dir, { recursive: true });
       const base = path.join(dir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${label}`);
       await this.page.screenshot({ path: `${base}.png` }).catch(() => {});
+      // Only look if the panel exists, and never wait on it: a missing element would otherwise block for Playwright's 30 s default.
+      const sidePanel = this.page.locator('[aria-label="Side panel"]').first();
+      const panel = (await sidePanel.count().catch(() => 0)) ? await sidePanel.evaluate((el) => el.outerHTML, undefined, { timeout: 2000 }).catch(() => "") : "";
+      if (panel) fs.writeFileSync(`${base}.panel.html`, panel.slice(0, 60_000));
       fs.writeFileSync(`${base}.aria.txt`, `${this.page.url()}\n\n${await this.page.locator("body").ariaSnapshot({ timeout: 5000 }).catch(() => "(no snapshot)")}`);
       console.log(`[meet] debug dump: ${base}.*`);
     } catch {}
@@ -49,7 +56,10 @@ export class MeetAdapter implements PlatformAdapter {
     if (page.isClosed()) return "ended";
     const url = page.url();
     const text = await page.locator("body").innerText({ timeout: 3000 }).catch(() => "");
+    this.lastText = text;
     const visible = async (sel: string) => (await page.locator(sel).first().isVisible().catch(() => false));
+    // The waiting room has a "Leave call" button too (seen on real Meet), so "waiting" must be decided BEFORE "in_call".
+    if (TEXT.waiting.test(text)) return "waiting";
     if (await visible(S.leaveButton)) return "in_call";
     if (TEXT.removed.test(text)) return "removed";
     if ((await page.locator(S.captcha).count().catch(() => 0)) > 0 || TEXT.captcha.test(text)) return "captcha";
@@ -57,7 +67,6 @@ export class MeetAdapter implements PlatformAdapter {
     if (TEXT.badLink.test(text)) return "bad_link";
     if (TEXT.guestsBlocked.test(text)) return "guests_blocked";
     if (TEXT.ended.test(text)) return "ended";
-    if (TEXT.waiting.test(text)) return "waiting";
     if (await page.getByRole("button", { name: S.joinButton }).first().isVisible().catch(() => false)) return "prejoin";
     if (/accounts\.google\.com/.test(url) || TEXT.signIn.test(text)) return "sign_in_required";
     return "unknown";
@@ -80,7 +89,7 @@ export class MeetAdapter implements PlatformAdapter {
     while (Date.now() < deadline) {
       const ph = await this.phase();
       switch (ph) {
-        case "in_call": await this.dump("in-call"); return { admitted: true };
+        case "in_call": await sleep(2500); await this.dump("in-call"); return { admitted: true }; // let the call UI settle before we start poking at it
         case "captcha": await this.dump("captcha", true); return { admitted: false, reason: "captcha" };
         case "denied": await this.dump("denied", true); return { admitted: false, reason: "denied" };
         case "bad_link": await this.dump("bad-link", true); return { admitted: false, reason: "bad_link" };
@@ -124,9 +133,9 @@ export class MeetAdapter implements PlatformAdapter {
    */
   async postConsent(message: string): Promise<boolean> {
     const probe = message.slice(0, 40);
-    for (let attempt = 1; attempt <= 4; attempt++) {
+    for (let attempt = 1; attempt <= 6; attempt++) {
       try {
-        if (!(await this.openChat())) return false; // host disabled chat, or the button moved
+        if (!(await this.openChat())) { await this.dump(`consent-no-chat-${attempt}`); await sleep(2500); continue; } // not ready yet, host disabled chat, or the button moved
         const box = this.p.locator(S.chatInput).first();
         await box.fill(message, { timeout: 3000 });
         await box.press("Enter", { timeout: 3000 });
@@ -141,8 +150,10 @@ export class MeetAdapter implements PlatformAdapter {
   async watchSpeakers(cb: (name: string, text: string, epochMs: number) => void): Promise<void> {
     const page = this.p;
     await page.exposeFunction("__miloCaption", (name: string, text: string) => cb(name, text, Date.now()));
-    await this.clickIfVisible(page.locator(S.captionsOff)); // captions give real names with timestamps
-    await sleep(500);
+    await this.dump("before-captions");
+    const turnedOn = await this.clickIfVisible(page.locator(S.captionsOff)); // captions give real names with timestamps
+    await sleep(1500);
+    await this.dump(turnedOn ? "captions-on" : "captions-button-not-found", !turnedOn);
     await page.evaluate((sel) => {
       const last = new Map<number, string>();
       const scan = () => {
@@ -188,7 +199,10 @@ export class MeetAdapter implements PlatformAdapter {
 
   private async count(): Promise<number | undefined> {
     const page = this.p;
-    const label = await page.locator(S.peopleButton).first().evaluate((el) => `${el.getAttribute("aria-label") ?? ""} ${(el as HTMLElement).innerText ?? ""}`).catch(() => "");
+    if (TEXT.alone.test(this.lastText)) return 1; // Meet says so itself
+    const btn = page.locator(S.peopleButton).first();
+    // Only read it if it exists: `evaluate` on a missing element would wait out the full timeout on every poll.
+    const label = (await btn.count().catch(() => 0)) ? await btn.evaluate((el) => `${el.getAttribute("aria-label") ?? ""} ${(el as HTMLElement).innerText ?? ""}`, undefined, { timeout: 1500 }).catch(() => "") : "";
     const n = /(\d+)/.exec(label);
     if (n) return Number(n[1]);
     const tiles = await page.locator(S.participantTile).count().catch(() => 0);
@@ -198,31 +212,36 @@ export class MeetAdapter implements PlatformAdapter {
   async watchParticipants(cb: (names: string[], epochMs: number) => void): Promise<void> {
     const tick = async () => {
       if (!this.page || this.page.isClosed()) return;
-      const names = await this.page.locator(S.participantTile).evaluateAll((els) => els.map((e) => (e as HTMLElement).innerText.split("\n").map((l) => l.trim()).filter(Boolean)[0] ?? "").filter(Boolean)).catch(() => [] as string[]);
+      const names = (await this.page.locator(S.participantTile).evaluateAll((els) => els.map((e) => (e as HTMLElement).innerText.split("\n").map((l) => l.trim()).filter(Boolean)[0] ?? "").filter(Boolean)).catch(() => [] as string[]))
+        .filter((n) => !/^[a-z]+(_[a-z]+)+$/.test(n)); // icon ligature text such as "visual_effects" is not a person
       if (names.length) cb([...new Set(names)], Date.now());
       setTimeout(tick, 5000);
     };
     setTimeout(tick, 2000);
   }
 
-  async detectEnd(o: { aloneGraceMs: number; aloneAtStartMs: number; maxMs: number }): Promise<EndReason> {
-    const t0 = Date.now(); let aloneSince = 0;
+  async detectEnd(o: { aloneGraceMs: number; aloneAtStartMs: number; maxMs: number; onCount?: (n: number, epochMs: number) => void }): Promise<EndReason> {
+    const t0 = Date.now(); let aloneSince = 0, lastTick = Date.now();
     for (;;) {
       if (Date.now() - t0 > o.maxMs) return "timeout";
+      const pollStart = Date.now();
       const ph = await this.phase();
-      if (ph === "removed") return "removed";
-      if (ph === "ended" || ph === "denied") return "ended";
+      if (ph === "removed") { await this.dump("removed", true); return "removed"; }
+      if (ph === "ended" || ph === "denied") { await this.dump("ended", true); return "ended"; }
       if (ph !== "in_call" && ph !== "unknown") return "ended";
+      if (config.debug && Date.now() - lastTick > 45_000) { lastTick = Date.now(); await this.dump("tick"); }
       const n = await this.count();
       if (n !== undefined) {
+        o.onCount?.(n, Date.now());
         if (n > 1) { this.everSawOthers = true; aloneSince = 0; }
         else {
           aloneSince ||= Date.now();
           // Allow a long wait if nobody has arrived yet; leave quickly once everyone else has gone.
-          if (Date.now() - aloneSince > (this.everSawOthers ? o.aloneGraceMs : o.aloneAtStartMs)) return "alone";
+          if (Date.now() - aloneSince > (this.everSawOthers ? o.aloneGraceMs : o.aloneAtStartMs)) { await this.dump("alone"); return "alone"; }
         }
       }
-      await sleep(2000);
+      if (Date.now() - pollStart > 4000) console.warn(`[meet] slow poll: ${Date.now() - pollStart}ms`);
+      await sleep(1000);
     }
   }
 

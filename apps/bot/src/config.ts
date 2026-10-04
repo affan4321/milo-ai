@@ -13,7 +13,8 @@ export const config = {
   chromeChannel: process.env.BOT_CHROME_CHANNEL ?? "chrome",
   debug: process.env.BOT_DEBUG === "1",
   joinTimeoutMs: num("BOT_JOIN_TIMEOUT_MS", 10 * 60_000),
-  aloneGraceMs: num("BOT_ALONE_GRACE_MS", 60_000),
+  // After everyone else leaves: wait this long (in case someone just dropped and rejoins) before leaving too.
+  aloneGraceMs: num("BOT_ALONE_GRACE_MS", 15_000),
   aloneAtStartMs: num("BOT_ALONE_AT_START_MS", 5 * 60_000),
   maxMeetingMs: num("BOT_MAX_MEETING_MS", 5 * 3_600_000),
   heartbeatMs: num("BOT_HEARTBEAT_MS", 30_000),

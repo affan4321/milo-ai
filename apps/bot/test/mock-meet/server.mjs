@@ -24,7 +24,7 @@ function draw(){
   if(draw.sig!==sig){ draw.sig=sig; r.innerHTML='';
     if(s.state==='prejoin'){ r.append(el('<div><h2>Ready to join?</h2><input aria-label="Your name" placeholder="Your name"><br><button role="button" aria-label="Turn off microphone">Mic</button><button role="button" aria-label="Turn off camera">Cam</button><br><button id="join">'+(s.mode==='nowait'?'Join now':'Ask to join')+'</button></div>'));
       r.querySelector('#join').onclick=async()=>{await post('/m/'+code+'/join',{name:r.querySelector('input')?.value||''})}; }
-    else if(s.state==='waiting'){ r.append(el('<div><h2>Asking to be let in…</h2><p>Someone will let you in soon</p></div>')); }
+    else if(s.state==='waiting'){ r.append(el('<div><h2>Please wait until a meeting host brings you into the call</h2><div style="position:fixed;bottom:20px;left:20px"><button role="button" aria-label="Leave call">Leave</button></div></div>')); }  /* real Meet's lobby also has a Leave call button */
     else if(s.state==='denied'){ r.append(el('<div><h2>Someone in the meeting denied your request to join</h2></div>')); }
     else if(s.state==='blocked'){ r.append(el("<div><h2>You can't join this video call</h2></div>")); }
     else if(s.state==='captcha'){ r.append(el('<div><h2>Confirm you are not a robot</h2></div>')); }
@@ -32,7 +32,7 @@ function draw(){
     else if(s.state==='removed'){ r.append(el("<div><h2>You've been removed from the meeting</h2></div>")); }
     else if(s.state==='in_call'){
       if(!started){started=true; document.getElementById('a').play().catch(()=>{});}
-      r.append(el('<div>'+(s.people||[]).slice(0,s.others).map((n,i)=>'<div data-participant-id="p'+i+'" style="position:fixed;left:'+(20+i*140)+'px;top:20px;width:120px;height:60px;background:#444">'+n+'</div>').join('')+'<canvas id="cv" width="640" height="360"></canvas><div style="position:fixed;bottom:20px;left:20px"><button role="button" aria-label="Show everyone">'+(1+s.others)+'</button><button role="button" aria-label="Chat with everyone">Chat</button>'+(capsOn?'':'<button role="button" aria-label="Turn on captions">CC</button>')+'<button role="button" aria-label="Leave call">Leave</button></div></div>'));
+      r.append(el('<div>'+(s.people||[]).slice(0,s.others).map((n,i)=>'<div data-participant-id="p'+i+'" style="position:fixed;left:'+(20+i*140)+'px;top:20px;width:120px;height:60px;background:#444">'+n+'</div>').join('')+'<canvas id="cv" width="640" height="360"></canvas><div style="position:fixed;bottom:20px;left:20px"><button aria-label="People">'+(1+s.others)+'</button>'+(s.others===0?'<div style="position:fixed;top:60px;left:40%">No one else is in this meeting</div>':'')+'<button role="button" aria-label="Chat with everyone">Chat</button>'+(capsOn?'':'<button role="button" aria-label="Turn on captions">CC</button>')+'<button role="button" aria-label="Leave call">Leave</button></div></div>'));
       r.querySelector('[aria-label="Leave call"]').onclick=()=>post('/m/'+code+'/leave');
       const cc=r.querySelector('[aria-label="Turn on captions"]'); if(cc) cc.onclick=()=>{capsOn=true;draw.sig=null;draw()};
       r.querySelector('[aria-label="Chat with everyone"]').onclick=()=>{chatOpen=!chatOpen;draw.sig=null;draw()};

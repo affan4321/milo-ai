@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import type { BotJob, Sidecar } from "@milo/core";
 import { runSession, retryPending, type Deps } from "./session";
+import { HttpError } from "./api";
 import type { EndReason, JoinResult, PlatformAdapter } from "./platforms/types";
 import { SidecarCollector } from "./sidecar";
 
@@ -101,6 +102,12 @@ const h2 = harness({}); h2.deps.cfg = h.deps.cfg; (h2.deps as any).cfg = h.deps.
 check(await retryPending(h2.deps) === 1 && h2.uploads.order.join() === "sidecar,recording" && !fs.existsSync(h.sessionDir), "retryPending delivers and cleans up");
 check(await retryPending(h2.deps) === 0, "nothing left to retry");
 
+// 10b. the web app says the session no longer exists (404) -> discard instead of retrying forever
+h = harness({});
+fs.mkdirSync(h.sessionDir, { recursive: true }); fs.writeFileSync(path.join(h.sessionDir, "sidecar.json"), "{}"); fs.writeFileSync(path.join(h.sessionDir, "recording.mp4"), "x");
+h.deps.api.uploadSidecar = async () => { throw new HttpError(404, "HTTP 404 not found"); };
+check(await retryPending(h.deps) === 0 && !fs.existsSync(h.sessionDir), "404 on hand-over discards the orphaned recording");
+
 // 11. heartbeat: same state repeated while waiting for the call to end
 h = harness({ hb: 40, end: () => new Promise((r) => setTimeout(() => r("ended"), 200)) });
 await runSession(job, h.deps);
@@ -116,6 +123,18 @@ check(b.speakerEvents.map((e) => e.name).join() === "Ada,Bob" && b.speakerEvents
 check(b.chat.length === 1, "duplicate chat message collapsed");
 check(b.participants.find((p) => p.name === "Bob")!.leftMs === 8000 && b.participants.find((p) => p.name === "Ada")!.leftMs === null, "roster join/leave times");
 check(new SidecarCollector("meet").build("ended", 0).captions.length === 0, "empty collector builds cleanly");
+const jk = new SidecarCollector("meet"); jk.start(0); jk.participants(["Ada", "visual_effects", "keyboard_arrow_down", "Bob"], 1000);
+check(jk.build("ended", 0).participants.map((p) => p.name).join() === "Ada,Bob", "icon ligature text is not a participant");
+// continuous speaking observations (thinned to ~1.5 s) and peak participant count
+const pk = new SidecarCollector("meet"); pk.start(0);
+for (let t = 1000; t <= 20_000; t += 300) pk.caption("Ada", "talking " + t, t);
+pk.count(1, 500); pk.count(2, 2000); pk.count(2, 3000); pk.count(1, 25_000);
+const pb = pk.build("ended", 0);
+check(pb.speakerEvents.length >= 12 && pb.speakerEvents.length <= 16 && pb.speakerEvents.every((e) => e.name === "Ada"), `repeated captions become ~1.5 s observations (${pb.speakerEvents.length})`);
+check(pb.peakParticipants === 2, "peak participant count recorded");
+const ch = new SidecarCollector("meet"); ch.start(0);
+ch.chat("Milo AI Notetaker is recording and transcribing this meeting for the meeting owner. If you'd rather not be recorded", "Hover over a message", 100); ch.chat("Milo AI Notetaker", "anything", 200); ch.chat("Ada", "real message", 300);
+check(ch.build("ended", 0).chat.map((c) => c.text).join() === "real message", "the bot's own consent message is not recorded as chat");
 // roster falls back to speakers seen in captions when the participant list can't be read
 const fb = new SidecarCollector("meet"); fb.start(0); fb.caption("Ada", "hi", 2000); fb.caption("Milo AI Notetaker", "x", 3000); fb.caption("You", "y", 4000);
 check(fb.build("ended", 0).participants.map((p) => p.name).join() === "Ada" && fb.build("ended", 0).participants[0]!.joinedMs === 2000, "participants fall back to caption speakers (never the bot or 'You')");

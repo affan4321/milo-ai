@@ -16,19 +16,23 @@ export const S = {
   chatInput: 'textarea[aria-label*="Send a message" i], textarea[placeholder*="Send a message" i]',
   chatSend: '[role="button"][aria-label*="Send a message" i], button[aria-label*="Send a message" i]',
   chatMessage: '[data-message-id]',
-  peopleButton: '[role="button"][aria-label*="Show everyone" i], [role="button"][aria-label*="People" i]',
+  // Real Meet: a plain <button aria-label="People"> whose text is the participant count (no role attribute). Older/other layouts say "Show everyone".
+  peopleButton: 'button[aria-label="People" i], [role="button"][aria-label="People" i], button[aria-label*="Show everyone" i], [role="button"][aria-label*="Show everyone" i]',
   participantTile: '[data-participant-id]',
   captcha: 'iframe[src*="recaptcha" i], iframe[title*="recaptcha" i]',
 } as const;
 
 /** Visible phrases, most specific first. */
 export const TEXT = {
-  waiting: /asking to be let in|someone will let you in soon|waiting for the host|waiting for someone to let you in/i,
+  // Real Meet shows the first phrase in the waiting room, on a page that ALSO has a 'Leave call' button.
+  waiting: /please wait until a meeting host brings you into the call|asking to be let in|someone will let you in soon|waiting for the host|waiting for someone to let you in/i,
   denied: /denied your request|request to join was denied|someone in the meeting denied/i,
   guestsBlocked: /you can.t join this (video )?call|isn.t allowed to join|can.t be joined by guests|only (people|users) (in|from) .* can join/i,
   signIn: /sign in to join|choose an account|you need to sign in/i,
   captcha: /not a robot|verify you.re human|unusual traffic/i,
   badLink: /check your meeting code|invalid video call name|meeting code .* (isn.t|is not) valid|couldn.t find (that|the) meeting/i,
+  // Meet's own notice when everyone else has gone. Faster and more certain than waiting for the count to update.
+  alone: /no one else is in this meeting|you.re the only one here|you.re the only person here/i,
   removed: /you.ve been removed from the meeting|you were removed from the meeting|removed you from the meeting/i,
   ended: /you left the meeting|the meeting has ended|this call has ended|return to home screen|you.ve left the call|call ended/i,
 } as const;

@@ -2,7 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { isBotName, type Sidecar } from "@milo/core";
 import { PermanentError } from "@milo/core";
 import { recordings, meetings, participants, speakers, transcriptSegments, runStage, type Db } from "@milo/db";
-import { nameSegments } from "./naming";
+import { nameFromSidecar } from "./naming";
 import type { SttProvider, StorageProvider } from "@milo/providers";
 
 const CHUNK = 400;
@@ -26,7 +26,7 @@ export async function transcribeRecording(db: Db, storage: StorageProvider, stt:
     let segs = await stt.transcribe({ key: rec.audioKey, durationMs: rec.durationMs }, storage);
     const sidecar = await loadSidecar(storage, rec.sidecarKey);
     // Real names from the bot's live captions beat "Speaker 1". Absent or unreadable sidecar just means generic labels.
-    if (sidecar) segs = nameSegments(segs, sidecar.speakerEvents);
+    if (sidecar) segs = nameFromSidecar(segs, sidecar);
     if (!segs.length) throw new PermanentError("No speech was detected in this recording.");
 
     const meetingId = rec.meetingId;

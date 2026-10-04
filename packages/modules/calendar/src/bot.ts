@@ -90,6 +90,7 @@ export async function applyBotState(db: Db, sessionId: string, u: BotStateUpdate
 }
 
 export async function recordWorkerBeat(db: Db, w: { id: string; busy: boolean; sessionId?: string | null }, now = new Date()) {
+  await db.delete(botWorkers).where(lt(botWorkers.lastSeenAt, new Date(+now - 6 * 3_600_000))); // forget bots that vanished long ago
   await db.insert(botWorkers).values({ id: w.id, busy: w.busy, sessionId: w.sessionId ?? null, lastSeenAt: now })
     .onConflictDoUpdate({ target: botWorkers.id, set: { busy: w.busy, sessionId: w.sessionId ?? null, lastSeenAt: now } });
 }

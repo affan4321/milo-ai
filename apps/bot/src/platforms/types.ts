@@ -14,7 +14,8 @@ export interface PlatformAdapter {
   watchSpeakers(cb: (name: string, text: string, epochMs: number) => void): Promise<void>;
   watchChat(cb: (from: string, text: string, epochMs: number) => void): Promise<void>;
   watchParticipants(cb: (names: string[], epochMs: number) => void): Promise<void>;
-  detectEnd(o: { aloneGraceMs: number; aloneAtStartMs: number; maxMs: number }): Promise<EndReason>;
+  /** `onCount` receives the platform's participant count (including the bot) every poll. */
+  detectEnd(o: { aloneGraceMs: number; aloneAtStartMs: number; maxMs: number; onCount?: (n: number, epochMs: number) => void }): Promise<EndReason>;
   leave(): Promise<void>;
   close(): Promise<void>;
 }
