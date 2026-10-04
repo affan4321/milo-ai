@@ -1,5 +1,7 @@
-import { and, asc, eq, gte, inArray } from "drizzle-orm";
-import { getDb, calendarConnections, calendarEvents } from "@milo/db";
+import Link from "next/link";
+import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
+import { getDb, calendarConnections, calendarEvents, meetings } from "@milo/db";
+import { UploadButton } from "./upload-button";
 import { getCurrentUser } from "@/lib/session";
 import { ConnectIcsForm } from "./connect-form";
 import { resyncAction } from "./actions";
@@ -16,6 +18,7 @@ export default async function Home() {
         .where(and(inArray(calendarEvents.connectionId, conns.map((c) => c.id)), gte(calendarEvents.endsAt, new Date())))
         .orderBy(asc(calendarEvents.startsAt)).limit(50)
     : [];
+  const recent = await db.select().from(meetings).where(eq(meetings.ownerId, user.id)).orderBy(desc(meetings.createdAt)).limit(20);
   const failing = conns.find((c) => c.lastError);
   const lastSync = conns.map((c) => c.lastSyncedAt).filter(Boolean).sort().pop();
 
@@ -58,8 +61,26 @@ export default async function Home() {
       <ConnectIcsForm />
       <section className="flex gap-3">
         <button className="rounded bg-accent px-4 py-2 text-sm font-medium text-white">Send Milo to a meeting</button>
-        <button className="rounded border border-border px-4 py-2 text-sm">Upload a recording</button>
+        <UploadButton />
       </section>
+      {recent.length > 0 && (
+        <section>
+          <h2 className="mb-3 text-xl font-semibold">My calls</h2>
+          <ul className="divide-y divide-border rounded-lg border border-border bg-surface">
+            {recent.map((m) => (
+              <li key={m.id}>
+                <Link href={`/meetings/${m.id}`} className="flex items-center justify-between p-4 hover:bg-bg">
+                  <div>
+                    <div className="font-medium">{m.title}</div>
+                    <div className="text-sm text-muted">{m.createdAt.toLocaleString()} · {m.captureSource}</div>
+                  </div>
+                  <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted">{m.status === "ready" ? "Ready" : m.status === "failed" ? "Failed" : "Processing"}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }

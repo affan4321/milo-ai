@@ -1,7 +1,8 @@
 {
   "name": "@milo/worker",
   "version": "0.0.0",
-  "private": true, "type": "module",
+  "private": true,
+  "type": "module",
   "scripts": {
     "dev": "tsx watch --env-file=../../.env src/index.ts",
     "typecheck": "tsc -p ."
@@ -12,6 +13,8 @@
     "@milo/providers": "workspace:*",
     "pg-boss": "^10.1.0",
     "@milo/calendar": "workspace:*",
-    "drizzle-orm": "^0.36.0"
+    "drizzle-orm": "^0.36.0",
+    "@milo/media": "workspace:*",
+    "@milo/transcription": "workspace:*"
   }
 }

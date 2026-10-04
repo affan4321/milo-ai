@@ -1,4 +1,5 @@
 import * as F from "./fakes";
+import { LocalStorage } from "./storage/local";
 export * from "./types";
 export * from "./fakes";
 
@@ -6,10 +7,11 @@ export * from "./fakes";
 const pick = (k: string) => process.env[k] ?? "fake";
 export function getProviders() {
   return {
-    storage: new F.FakeStorage(), stt: new F.FakeStt(), llm: new F.FakeLlm(),
+    storage: new LocalStorage(), stt: new F.FakeStt(), llm: new F.FakeLlm(),
     calendar: new F.FakeCalendar(), email: new F.FakeEmail(),
     selected: { storage: pick("STORAGE_PROVIDER"), stt: pick("STT_PROVIDER"), llm: pick("LLM_PROVIDER") },
   };
 }
 export { IcsCalendar, parseIcs } from "./calendar/ics";
 export { GoogleCalendar, GoogleAuthError, parseGoogleEvents } from "./calendar/google";
+export { LocalStorage } from "./storage/local";

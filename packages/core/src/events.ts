@@ -20,3 +20,9 @@ export type BotState = "scheduled" | "joining" | "waiting_room" | "recording" | 
 
 export interface RecordingUploadedPayload { meetingId: string; recordingId: string }
 export interface MeetingPayload { meetingId: string }
+
+/** A failure that retrying cannot fix (bad input). The stage is marked failed; the queue must not retry it. */
+export class PermanentError extends Error {
+  readonly permanent = true;
+}
+export const isPermanent = (e: unknown): e is PermanentError => !!e && typeof e === "object" && (e as PermanentError).permanent === true;

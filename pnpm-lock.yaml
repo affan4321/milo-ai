@@ -50,6 +50,9 @@ importers:
       next-auth:
         specifier: 5.0.0-beta.32
         version: 5.0.0-beta.32(next@15.5.27(@types/node@22.20.5)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
+      pg-boss:
+        specifier: ^10.1.0
+        version: 10.4.2
       react:
         specifier: ^19.0.0
         version: 19.3.0
@@ -81,9 +84,15 @@ importers:
       '@milo/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@milo/media':
+        specifier: workspace:*
+        version: link:../../packages/modules/media
       '@milo/providers':
         specifier: workspace:*
         version: link:../../packages/providers
+      '@milo/transcription':
+        specifier: workspace:*
+        version: link:../../packages/modules/transcription
       drizzle-orm:
         specifier: ^0.36.0
         version: 0.36.4(@types/react@19.3.0)(pg@8.23.1)(postgres@3.4.9)(react@19.3.0)
@@ -110,6 +119,36 @@ importers:
         version: 0.28.1
 
   packages/modules/calendar:
+    dependencies:
+      '@milo/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@milo/db':
+        specifier: workspace:*
+        version: link:../../db
+      '@milo/providers':
+        specifier: workspace:*
+        version: link:../../providers
+      drizzle-orm:
+        specifier: ^0.36.0
+        version: 0.36.4(@types/react@19.3.0)(pg@8.23.1)(postgres@3.4.9)(react@19.3.0)
+
+  packages/modules/media:
+    dependencies:
+      '@milo/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@milo/db':
+        specifier: workspace:*
+        version: link:../../db
+      '@milo/providers':
+        specifier: workspace:*
+        version: link:../../providers
+      drizzle-orm:
+        specifier: ^0.36.0
+        version: 0.36.4(@types/react@19.3.0)(pg@8.23.1)(postgres@3.4.9)(react@19.3.0)
+
+  packages/modules/transcription:
     dependencies:
       '@milo/core':
         specifier: workspace:*

@@ -1,14 +1,23 @@
+import type { Readable } from "node:stream";
 import type { Platform } from "@milo/core";
 
 export interface StorageProvider {
   put(key: string, body: Uint8Array, contentType?: string): Promise<void>;
-  get(key: string): Promise<Uint8Array | null>;
-  signedUrl(key: string, expiresInSec?: number): Promise<string>;
+  /** Stream large bodies (recordings) without buffering them in memory. */
+  putStream(key: string, body: Readable): Promise<number>;
+  /** Copy a local file into storage (worker outputs). */
+  putFile(key: string, localPath: string): Promise<void>;
+  /** A local path ffmpeg can read. Local storage returns the real path; remote storage would download to a temp file. */
+  toLocalFile(key: string): Promise<string>;
+  size(key: string): Promise<number | null>;
+  /** Inclusive byte range, for HTTP Range playback. */
+  read(key: string, range?: { start: number; end: number }): Readable;
 }
 
 export interface TranscriptWord { w: string; s: number; e: number }
 export interface TranscriptSegmentOut { speakerLabel: string; startMs: number; endMs: number; text: string; words: TranscriptWord[] }
-export interface SttProvider { transcribe(audio: Uint8Array | { key: string }): Promise<TranscriptSegmentOut[]> }
+export interface SttInput { key: string; durationMs: number }
+export interface SttProvider { transcribe(input: SttInput, storage: StorageProvider): Promise<TranscriptSegmentOut[]> }
 
 export interface SummaryOut { sections: { heading: string; bullets: { text: string; ms?: number }[] }[] }
 export interface InsightsOut {
