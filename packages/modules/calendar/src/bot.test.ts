@@ -60,6 +60,7 @@ check((await planBotJoins(db, now)).length === 0, "same link already has a bot -
 // manual "Send Milo": validation
 const bad = await createBotSession(db, { ownerId: u!.id, meetingUrl: "https://example.com/nope" }); check("error" in bad, "non-meeting link rejected");
 const zoom = await createBotSession(db, { ownerId: u!.id, meetingUrl: "https://zoom.us/j/999" }); check("error" in zoom && /Zoom/.test(zoom.error), "unsupported platform explained");
+const teamsS = await createBotSession(db, { ownerId: u!.id, meetingUrl: "https://teams.microsoft.com/l/meetup-join/19%3ameeting_abc%40thread.v2/0" }); check("job" in teamsS && teamsS.job.platform === "teams", "Teams link accepted");
 const okS = await createBotSession(db, { ownerId: u!.id, meetingUrl: "  https://meet.google.com/abc-defg-hij?authuser=1 ", title: "Ad hoc" });
 check("job" in okS && okS.job.url === "https://meet.google.com/abc-defg-hij?authuser=1" && okS.job.platform === "meet", "manual link accepted and trimmed");
 

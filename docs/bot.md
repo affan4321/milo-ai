@@ -86,8 +86,9 @@ The end-to-end test needs Postgres, the web app (`BOT_TOKEN` set), a worker with
 
 ## Known limits
 
-- Selectors are unverified against live Meet (see §5).
+- Meet selectors have been tuned on real calls; Teams selectors have not (see §5).
 - Chrome for Linux is x86-64 only; on an ARM host the container falls back to Chromium, which Meet may treat differently.
 - Hosts can block bots or guests; that is reported, not worked around.
 - One meeting per container.
-- Zoom and Teams join scripts are not written yet (the adapter interface is shared).
+- Microsoft Teams joins as an anonymous guest through the web client (`platforms/teams.ts`, selectors in `teams-selectors.ts`). Its selectors are unverified against a live call, like Meet's were; tune from `BOT_DEBUG=1` dumps. Tenants that disable anonymous join are reported as "guests blocked".
+- The Zoom join script is not written yet (the adapter interface is shared; browser plumbing is in `platforms/web-adapter.ts`).

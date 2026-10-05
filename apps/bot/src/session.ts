@@ -4,6 +4,7 @@ import { isBotName, parseHighlightCommand, CONSENT_MESSAGE, type BotFailReason, 
 import { api as realApi, HttpError } from "./api";
 import { config } from "./config";
 import { MeetAdapter } from "./platforms/meet";
+import { TeamsAdapter } from "./platforms/teams";
 import type { EndReason, PlatformAdapter } from "./platforms/types";
 import { startRecording, type Recording } from "./recorder";
 import { SidecarCollector } from "./sidecar";
@@ -15,7 +16,7 @@ export interface Deps {
   cfg: Pick<typeof config, "dataDir" | "heartbeatMs" | "aloneGraceMs" | "aloneAtStartMs" | "maxMeetingMs">;
 }
 export const defaultDeps: Deps = {
-  makeAdapter: (platform) => { if (platform === "meet") return new MeetAdapter(); throw new Error(`no join script for ${platform} yet`); },
+  makeAdapter: (platform) => { if (platform === "meet") return new MeetAdapter(); if (platform === "teams") return new TeamsAdapter(); throw new Error(`no join script for ${platform} yet`); },
   record: startRecording, api: realApi, cfg: config,
 };
 
