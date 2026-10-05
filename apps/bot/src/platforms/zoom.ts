@@ -1,6 +1,6 @@
 import { config } from "../config";
 import type { EndReason, JoinResult, PlatformAdapter } from "./types";
-import { WebAdapter, sleep } from "./web-adapter";
+import { WebAdapter, sleep, realCaptchaOnScreen } from "./web-adapter";
 import { S, TEXT } from "./zoom-selectors";
 
 export type ZoomPhase = "in_call" | "captcha" | "denied" | "guests_blocked" | "bad_link" | "waiting" | "prejoin" | "removed" | "ended" | "unknown";
@@ -52,7 +52,7 @@ export class ZoomAdapter extends WebAdapter implements PlatformAdapter {
       leave: await vis(page.locator(S.leaveButton)),
       join: await page.getByRole("button", { name: S.joinButton }).first().isVisible().catch(() => false),
       nameInput: await vis(page.locator(S.nameInput)),
-      captcha: await page.locator(S.captcha).first().isVisible().catch(() => false), // a hidden frame is not a challenge
+      captcha: await realCaptchaOnScreen(page, S.captcha), // the invisible badge is not a challenge
     });
   }
 

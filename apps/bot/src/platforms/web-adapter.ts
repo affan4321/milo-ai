@@ -5,6 +5,19 @@ import { config } from "../config";
 
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Is a real reCAPTCHA challenge on screen? Meet (and Teams, Zoom) always load an invisible reCAPTCHA badge frame, which hangs half
+ * off the edge of the window, so "a recaptcha iframe exists/is visible" is true even in a healthy call. A challenge is a frame that is
+ * large enough to hold a widget and sits entirely inside the window.
+ */
+export async function realCaptchaOnScreen(page: Page, selector: string): Promise<boolean> {
+  return page.evaluate((sel) => Array.from(document.querySelectorAll(sel)).some((el) => {
+    const r = el.getBoundingClientRect(), cs = getComputedStyle(el);
+    return cs.display !== "none" && cs.visibility !== "hidden" && !el.closest(".grecaptcha-badge")
+      && r.width >= 200 && r.height >= 60 && r.left >= 0 && r.top >= 0 && r.right <= window.innerWidth && r.bottom <= window.innerHeight;
+  }), selector).catch(() => false);
+}
+
 /** Browser plumbing shared by every web-based platform adapter (launch, debug dumps, safe clicking). */
 export abstract class WebAdapter {
   protected ctx?: BrowserContext;

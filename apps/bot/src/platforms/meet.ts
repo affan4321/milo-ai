@@ -1,5 +1,5 @@
 import { config } from "../config";
-import { WebAdapter, sleep } from "./web-adapter";
+import { WebAdapter, sleep, realCaptchaOnScreen } from "./web-adapter";
 import type { EndReason, JoinResult, PlatformAdapter } from "./types";
 import { S, TEXT } from "./meet-selectors";
 
@@ -23,7 +23,7 @@ export class MeetAdapter extends WebAdapter implements PlatformAdapter {
     if (await visible(S.leaveButton)) return "in_call";
     if (TEXT.removed.test(text)) return "removed";
     // Meet always loads a hidden reCAPTCHA frame, even on the "Connecting…" screen: only a VISIBLE challenge (or its wording) is a block.
-    if ((await page.locator(S.captcha).first().isVisible().catch(() => false)) || TEXT.captcha.test(text)) return "captcha";
+    if ((await realCaptchaOnScreen(page, S.captcha)) || TEXT.captcha.test(text)) return "captcha"; // the invisible badge Meet always loads is not a challenge
     if (TEXT.denied.test(text)) return "denied";
     if (TEXT.badLink.test(text)) return "bad_link";
     if (TEXT.guestsBlocked.test(text)) return "guests_blocked";

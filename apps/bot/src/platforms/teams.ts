@@ -1,6 +1,6 @@
 import { config } from "../config";
 import type { EndReason, JoinResult, PlatformAdapter } from "./types";
-import { WebAdapter, sleep } from "./web-adapter";
+import { WebAdapter, sleep, realCaptchaOnScreen } from "./web-adapter";
 import { S, TEXT } from "./teams-selectors";
 
 export type TeamsPhase = "in_call" | "captcha" | "denied" | "guests_blocked" | "bad_link" | "waiting" | "prejoin" | "launcher" | "removed" | "ended" | "unknown";
@@ -39,7 +39,7 @@ export class TeamsAdapter extends WebAdapter implements PlatformAdapter {
       leave: await vis(page.locator(S.leaveButton)),
       join: await page.getByRole("button", { name: S.joinButton }).first().isVisible().catch(() => false),
       joinOnWeb: await page.getByRole("button", { name: S.joinOnWeb }).first().isVisible().catch(() => false) || await page.getByRole("link", { name: S.joinOnWeb }).first().isVisible().catch(() => false),
-      captcha: await page.locator('iframe[src*="recaptcha" i]').first().isVisible().catch(() => false), // a hidden frame is not a challenge
+      captcha: await realCaptchaOnScreen(page, 'iframe[src*="recaptcha" i]'), // the invisible badge is not a challenge
     });
   }
 
