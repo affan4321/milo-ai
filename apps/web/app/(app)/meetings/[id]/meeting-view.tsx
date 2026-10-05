@@ -30,12 +30,12 @@ const Line = memo(function Line({ seg, index, speaker, hue, active, selected, on
 export interface ChapterView { id: string; title: string; startMs: number }
 type Tab = "summary" | "actions" | "transcript";
 
-export function MeetingView({ meetingId, mediaUrl, isVideo, speakers, segments, chapters, actionItems, templates, summaries, defaultTemplate, insights, highlights, clips, durationMs }: {
+export function MeetingView({ meetingId, mediaUrl, isVideo, speakers, segments, chapters, actionItems, templates, summaries, defaultTemplate, insights, highlights, clips, durationMs, initialSeekMs }: {
   meetingId: string; mediaUrl: string; isVideo: boolean; speakers: SpeakerView[]; segments: SegmentView[];
   chapters: ChapterView[]; actionItems: ActionItemView[]; templates: TemplateOpt[]; summaries: Record<string, SummaryContent>; defaultTemplate: string; insights: StageView | null;
-  highlights: HighlightView[]; clips: ClipView[]; durationMs: number;
+  highlights: HighlightView[]; clips: ClipView[]; durationMs: number; initialSeekMs?: number;
 }) {
-  const [tab, setTab] = useState<Tab>("summary");
+  const [tab, setTab] = useState<Tab>(initialSeekMs !== undefined ? "transcript" : "summary"); // arriving from a search result or citation: show the words
   const media = useRef<HTMLVideoElement & HTMLAudioElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(-1);
@@ -76,6 +76,15 @@ export function MeetingView({ meetingId, mediaUrl, isVideo, speakers, segments, 
   }, [active, follow, segments, tab]);
 
   useEffect(() => { if (media.current) media.current.playbackRate = rate; }, [rate]);
+
+  // Jump to the moment named in the link (?t=ms) once the player knows its length. Seek only; the browser won't autoplay anyway.
+  useEffect(() => {
+    const el = media.current; if (!el || initialSeekMs === undefined) return;
+    const go = () => { el.currentTime = initialSeekMs / 1000; setNowMs(initialSeekMs); setActive(indexAt(initialSeekMs)); };
+    if (el.readyState >= 1) go(); else el.addEventListener("loadedmetadata", go, { once: true });
+    return () => el.removeEventListener("loadedmetadata", go);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSeekMs]);
 
   const pick = useCallback((i: number, shift: boolean) => {
     if (shift && anchor.current >= 0) { setSel({ a: Math.min(anchor.current, i), b: Math.max(anchor.current, i) }); return; }

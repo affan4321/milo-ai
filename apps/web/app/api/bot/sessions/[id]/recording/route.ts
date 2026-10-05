@@ -23,7 +23,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const values = { meetingId: s.meetingId, rawKey, sidecarKey: (await storage.size(sidecarKey)) ? sidecarKey : null };
   const [existing] = await db.select().from(recordings).where(eq(recordings.meetingId, s.meetingId));
   const [rec] = existing ? await db.update(recordings).set(values).where(eq(recordings.id, existing.id)).returning() : await db.insert(recordings).values(values).returning();
-  await ensureStages(db, rec!.id, ["media", "transcription", "intelligence"]);
+  await ensureStages(db, rec!.id, ["media", "transcription", "intelligence", "indexing"]);
   await db.update(meetings).set({ status: "processing" }).where(eq(meetings.id, s.meetingId));
   await enqueue(Events.RecordingUploaded, { recordingId: rec!.id });
   return Response.json({ ok: true, bytes });

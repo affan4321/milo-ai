@@ -30,7 +30,7 @@ export async function retryStageAction(meetingId: string, stage: string) {
   const db = getDb();
   const [rec] = await db.select().from(recordings).where(eq(recordings.meetingId, meetingId));
   if (!rec) return;
-  const event = stage === "media" ? Events.RecordingUploaded : stage === "transcription" ? Events.MediaReady : stage === "intelligence" ? Events.TranscriptReady : null;
+  const event = stage === "media" ? Events.RecordingUploaded : stage === "transcription" ? Events.MediaReady : stage === "intelligence" ? Events.TranscriptReady : stage === "indexing" ? "indexing" : null;
   if (!event) return;
   await db.update(pipelineStage).set({ status: "pending", error: null }).where(and(eq(pipelineStage.recordingId, rec.id), eq(pipelineStage.stage, stage)));
   await enqueue(event, { recordingId: rec.id });
@@ -120,4 +120,11 @@ export async function revokeClipShareAction(clipId: string) {
   const clip = await ownedClip(clipId);
   await revokeShares(getDb(), clipId);
   revalidatePath(`/meetings/${clip.meetingId}`);
+}
+
+/** Share a meeting with the owner's workspace (Team calls, search and Ask), or take it back to private. */
+export async function setVisibilityAction(meetingId: string, visibility: "private" | "team") {
+  await ownedMeeting(meetingId);
+  await getDb().update(meetings).set({ visibility: visibility === "team" ? "team" : "private" }).where(eq(meetings.id, meetingId));
+  revalidatePath(`/meetings/${meetingId}`);
 }

@@ -44,12 +44,18 @@ importers:
       '@milo/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@milo/indexing':
+        specifier: workspace:*
+        version: link:../../packages/modules/indexing
       '@milo/intelligence':
         specifier: workspace:*
         version: link:../../packages/modules/intelligence
       '@milo/providers':
         specifier: workspace:*
         version: link:../../packages/providers
+      '@milo/search':
+        specifier: workspace:*
+        version: link:../../packages/modules/search
       '@milo/sharing':
         specifier: workspace:*
         version: link:../../packages/modules/sharing
@@ -96,6 +102,9 @@ importers:
       '@milo/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@milo/indexing':
+        specifier: workspace:*
+        version: link:../../packages/modules/indexing
       '@milo/intelligence':
         specifier: workspace:*
         version: link:../../packages/modules/intelligence
@@ -105,6 +114,9 @@ importers:
       '@milo/providers':
         specifier: workspace:*
         version: link:../../packages/providers
+      '@milo/search':
+        specifier: workspace:*
+        version: link:../../packages/modules/search
       '@milo/sharing':
         specifier: workspace:*
         version: link:../../packages/modules/sharing
@@ -151,6 +163,21 @@ importers:
         specifier: ^0.36.0
         version: 0.36.4(@types/react@19.3.0)(pg@8.23.1)(postgres@3.4.9)(react@19.3.0)
 
+  packages/modules/indexing:
+    dependencies:
+      '@milo/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@milo/db':
+        specifier: workspace:*
+        version: link:../../db
+      '@milo/providers':
+        specifier: workspace:*
+        version: link:../../providers
+      drizzle-orm:
+        specifier: ^0.36.0
+        version: 0.36.4(@types/react@19.3.0)(pg@8.23.1)(postgres@3.4.9)(react@19.3.0)
+
   packages/modules/intelligence:
     dependencies:
       '@milo/core':
@@ -167,6 +194,21 @@ importers:
         version: 0.36.4(@types/react@19.3.0)(pg@8.23.1)(postgres@3.4.9)(react@19.3.0)
 
   packages/modules/media:
+    dependencies:
+      '@milo/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@milo/db':
+        specifier: workspace:*
+        version: link:../../db
+      '@milo/providers':
+        specifier: workspace:*
+        version: link:../../providers
+      drizzle-orm:
+        specifier: ^0.36.0
+        version: 0.36.4(@types/react@19.3.0)(pg@8.23.1)(postgres@3.4.9)(react@19.3.0)
+
+  packages/modules/search:
     dependencies:
       '@milo/core':
         specifier: workspace:*

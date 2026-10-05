@@ -5,33 +5,26 @@ export interface GeminiClientOptions { apiKey: string; model?: string; fetch?: t
 export type GeminiPart = { text: string } | { inlineData: { mimeType: string; data: string } };
 
 /**
- * One Gemini generateContent call returning parsed JSON. Error classes matter to the queue:
- * transient (429 / 5xx / empty or unparsable output) throw plain Errors and get retried;
- * permanent (bad key, blocked prompt, bad request) throw PermanentError and do not.
+ * One Gemini REST call returning the parsed response body. Error classes matter to the queue:
+ * transient (429 / 5xx) throw plain Errors and get retried; permanent (bad key, blocked prompt, bad request, daily quota)
+ * throw PermanentError / DailyQuotaError and do not.
  */
-export async function geminiJson(o: GeminiClientOptions, req: { system: string; parts: GeminiPart[]; schema: object; temperature?: number }): Promise<unknown> {
+export async function geminiCall(o: GeminiClientOptions, method: "generateContent" | "batchEmbedContents", body: unknown): Promise<any> {
   if (!o.apiKey) throw new PermanentError("GEMINI_API_KEY is not set on the server.");
   const f = o.fetch ?? fetch;
-  const res = await f(`https://generativelanguage.googleapis.com/v1beta/models/${o.model ?? "gemini-3.5-flash"}:generateContent`, {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-goog-api-key": o.apiKey },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: req.system }] },
-      contents: [{ role: "user", parts: req.parts }],
-      generationConfig: { responseMimeType: "application/json", responseSchema: req.schema, temperature: req.temperature ?? 0.2 },
-    }),
-    signal: AbortSignal.timeout(o.timeoutMs ?? 180_000),
+  const model = o.model ?? "gemini-3.5-flash";
+  const res = await f(`https://generativelanguage.googleapis.com/v1beta/models/${model}:${method}`, {
+    method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": o.apiKey }, body: JSON.stringify(body), signal: AbortSignal.timeout(o.timeoutMs ?? 180_000),
   });
   if (!res.ok) {
-    const body: any = await res.json().catch(() => ({}));
-    const msg = body?.error?.message ?? `HTTP ${res.status}`;
+    const err: any = await res.json().catch(() => ({}));
+    const msg = err?.error?.message ?? `HTTP ${res.status}`;
     if (res.status === 429) {
       // Per-day quota (free tier: a small fixed number of requests per model per day) will not clear by retrying in seconds.
-      const details: any[] = body?.error?.details ?? [];
+      const details: any[] = err?.error?.details ?? [];
       const perDay = details.some((d) => (d?.violations ?? []).some((v: any) => /PerDay/i.test(v?.quotaId ?? "")));
       if (perDay) {
         const delay = Number(String(details.find((d) => d?.retryDelay)?.retryDelay ?? "").replace(/s$/, "")) || undefined;
-        const model = o.model ?? "gemini-3.5-flash";
         throw new DailyQuotaError(`Gemini's daily limit for ${model} is used up${delay ? `; it resets in about ${Math.max(1, Math.round(delay / 3600))} h` : ""}. Retry later, or add a fallback model or billing.`, model, delay);
       }
       throw new Error(`Gemini rate limit reached (free tier). ${msg}`);
@@ -41,7 +34,16 @@ export async function geminiJson(o: GeminiClientOptions, req: { system: string; 
     if (res.status === 401 || res.status === 403) throw new PermanentError(`Gemini refused the request: ${msg}`);
     throw new PermanentError(`Gemini request failed: ${msg}`);
   }
-  const body: any = await res.json();
+  return res.json();
+}
+
+/** generateContent that returns parsed JSON (structured output). */
+export async function geminiJson(o: GeminiClientOptions, req: { system: string; parts: GeminiPart[]; schema: object; temperature?: number }): Promise<unknown> {
+  const body: any = await geminiCall(o, "generateContent", {
+    systemInstruction: { parts: [{ text: req.system }] },
+    contents: [{ role: "user", parts: req.parts }],
+    generationConfig: { responseMimeType: "application/json", responseSchema: req.schema, temperature: req.temperature ?? 0.2 },
+  });
   const cand = body?.candidates?.[0];
   if (body?.promptFeedback?.blockReason) throw new PermanentError(`Gemini blocked this content (${body.promptFeedback.blockReason}).`);
   const text = cand?.content?.parts?.map((p: any) => p.text ?? "").join("") ?? "";

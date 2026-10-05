@@ -1,7 +1,7 @@
 import { Readable } from "node:stream";
 import { eq } from "drizzle-orm";
 import { Events } from "@milo/core";
-import { getDb, meetings, recordings, ensureStages } from "@milo/db";
+import { getDb, meetings, recordings, ensureStages, ensureWorkspace } from "@milo/db";
 import { getProviders } from "@milo/providers";
 import { getCurrentUser } from "@/lib/session";
 import { enqueue } from "@/lib/queue";
@@ -22,7 +22,7 @@ export async function PUT(req: Request) {
 
   const db = getDb(), { storage } = getProviders();
   const title = decodeURIComponent(req.headers.get("x-title") ?? "").trim() || filename.replace(/\.[^.]+$/, "");
-  const [meeting] = await db.insert(meetings).values({ ownerId: user.id, title, status: "processing", captureSource: "upload", startedAt: new Date() }).returning();
+  const [meeting] = await db.insert(meetings).values({ ownerId: user.id, workspaceId: await ensureWorkspace(db, user.id), title, status: "processing", captureSource: "upload", startedAt: new Date() }).returning();
   const key = `meetings/${meeting!.id}/raw.${ext}`;
   try {
     const bytes = await storage.putStream(key, Readable.fromWeb(req.body as never));
@@ -32,7 +32,7 @@ export async function PUT(req: Request) {
     return Response.json({ error: e instanceof Error ? e.message : "Upload failed." }, { status: 500 });
   }
   const [rec] = await db.insert(recordings).values({ meetingId: meeting!.id, rawKey: key }).returning();
-  await ensureStages(db, rec!.id, ["media", "transcription", "intelligence"]);
+  await ensureStages(db, rec!.id, ["media", "transcription", "intelligence", "indexing"]);
   await enqueue(Events.RecordingUploaded, { recordingId: rec!.id });
   return Response.json({ meetingId: meeting!.id });
 }

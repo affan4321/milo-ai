@@ -1,7 +1,7 @@
 "use server";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { getDb, preferences, workspaces, memberships } from "@milo/db";
+import { getDb, preferences, ensureWorkspace } from "@milo/db";
 import { getCurrentUser } from "@/lib/session";
 import { templateForRole } from "@milo/intelligence";
 import { JOB_FUNCTIONS, validatePreferences } from "@/lib/onboarding";
@@ -13,13 +13,7 @@ const patch = async (userId: string, set: Partial<typeof preferences.$inferInser
 export async function chooseAccountAction(form: FormData) {
   const user = await getCurrentUser();
   const type = form.get("type") === "personal" ? "personal" : "team";
-  const db = getDb();
-  const [existing] = await db.select().from(memberships).where(eq(memberships.userId, user.id));
-  if (!existing) {
-    const domain = user.email.split("@")[1] ?? "workspace";
-    const [ws] = await db.insert(workspaces).values({ name: type === "personal" ? `${user.name ?? user.email}'s notes` : domain }).returning();
-    await db.insert(memberships).values({ userId: user.id, workspaceId: ws!.id, role: "owner" });
-  }
+  await ensureWorkspace(getDb(), user.id);
   await patch(user.id, { accountType: type, accountChosen: true });
   redirect("/onboarding");
 }
@@ -47,6 +41,7 @@ export async function saveRoleAction(form: FormData) {
   const user = await getCurrentUser();
   const role = String(form.get("role"));
   if (!(JOB_FUNCTIONS as readonly string[]).includes(role)) redirect("/onboarding/role");
+  await ensureWorkspace(getDb(), user.id); // work-email users skip the account step but still need a workspace
   await patch(user.id, { jobFunction: role, defaultTemplate: templateForRole(role), onboarded: true });
   redirect("/home");
 }

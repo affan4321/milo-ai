@@ -1,0 +1,1 @@
+ALTER TABLE "ask_messages" ADD COLUMN "seq" serial NOT NULL;

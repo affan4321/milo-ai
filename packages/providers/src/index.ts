@@ -10,7 +10,7 @@ const pick = (k: string) => process.env[k] ?? "fake";
 const list = (v?: string) => (v ?? "").split(",").map((x) => x.trim()).filter(Boolean);
 export function getProviders() {
   const llm = pick("LLM_PROVIDER") === "gemini"
-    ? new GeminiLlm({ apiKey: process.env.GEMINI_API_KEY ?? "", model: process.env.GEMINI_MODEL, fallbackModels: list(process.env.GEMINI_FALLBACK_MODELS) })
+    ? new GeminiLlm({ apiKey: process.env.GEMINI_API_KEY ?? "", model: process.env.GEMINI_MODEL, fallbackModels: list(process.env.GEMINI_FALLBACK_MODELS), embedModels: list(process.env.GEMINI_EMBED_MODELS) })
     : new F.FakeLlm();
   const stt = pick("STT_PROVIDER") === "gemini"
     ? new GeminiStt({ apiKey: process.env.GEMINI_API_KEY ?? "", model: process.env.GEMINI_STT_MODEL ?? process.env.GEMINI_MODEL, fallbackModels: list(process.env.GEMINI_STT_FALLBACK_MODELS) })
@@ -28,3 +28,5 @@ export { GeminiLlm } from "./llm/gemini";
 export { normalizeInsights, normalizeSummary, extractJson } from "./llm/normalize";
 export { GeminiStt } from "./stt/gemini";
 export { normalizeChunk, parseClock } from "./stt/normalize";
+export { geminiEmbed, normalize, EMBED_DIMS } from "./llm/embed";
+export { fakeEmbedding } from "./fakes";

@@ -2,6 +2,16 @@ import type {
   SttProvider, LlmProvider, CalendarProvider, EmailProvider, CalendarEventOut,
 } from "./types";
 
+export function fakeEmbedding(text: string): number[] {
+  const v = new Array(768).fill(0);
+  for (const w of text.toLowerCase().split(/[^a-z0-9]+/).filter((x) => x.length > 2)) {
+    let h = 5381; for (let i = 0; i < w.length; i++) h = ((h << 5) + h + w.charCodeAt(i)) >>> 0;
+    v[h % 768] += 1;
+  }
+  const n = Math.sqrt(v.reduce((a: number, x: number) => a + x * x, 0)) || 1;
+  return v.map((x: number) => x / n);
+}
+
 const NAMES = ["Speaker 1", "Speaker 2", "Speaker 3", "Speaker 4", "Speaker 5", "Speaker 6", "Speaker 7", "Speaker 8"];
 const SENTENCES = [
   "Thanks everyone for joining, let's start with the roadmap.",
@@ -57,8 +67,13 @@ export class FakeLlm implements LlmProvider {
     const actionItems = lines.filter((l) => /\bI'll\b|\bwill\b/i.test(l.text)).slice(0, 8).map((l) => ({ text: l.text, assignee: l.who, sourceMs: l.t * 1000 }));
     return { summary: await this.summarize(i), actionItems, chapters };
   }
-  async embed(texts: string[]) { return texts.map(() => new Array(768).fill(0)); }
-  async answer() { return { text: "This is a fake answer.", citedIds: [] }; }
+  /** Hashed bag-of-words: texts that share words get similar vectors, so retrieval behaves sensibly in tests without an API. */
+  async embed(texts: string[], _task?: "document" | "query") { return texts.map(fakeEmbedding); }
+  async answer(a: { question: string; context: { id: string; text: string }[] }) {
+    const top = a.context.slice(0, 2);
+    if (!top.length) return { text: "I couldn't find that in your meetings.", citedIds: [] };
+    return { text: `From the meetings: ${top.map((c) => `${c.text.slice(0, 80)} [${c.id}]`).join(" ")}`, citedIds: top.map((c) => c.id) };
+  }
 }
 
 export class FakeCalendar implements CalendarProvider {

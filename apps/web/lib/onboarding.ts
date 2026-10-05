@@ -1,7 +1,5 @@
-export const PERSONAL_DOMAINS = new Set([
-  "gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "live.com", "msn.com", "yahoo.com", "icloud.com", "me.com", "proton.me", "protonmail.com", "aol.com",
-]);
-export const isPersonalEmail = (email: string) => PERSONAL_DOMAINS.has(email.split("@")[1]?.toLowerCase() ?? "");
+import { isPersonalEmail } from "@milo/core";
+export { PERSONAL_DOMAINS, isPersonalEmail } from "@milo/core";
 
 export const RECORD_RULES = [
   { value: "all", label: "All meetings in my calendar" },

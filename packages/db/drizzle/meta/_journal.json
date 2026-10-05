@@ -50,6 +50,34 @@
       "when": 1791157975577,
       "tag": "0006_mute_night_thrasher",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791159098510,
+      "tag": "0007_wooden_purple_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791159100235,
+      "tag": "0008_search_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791159614625,
+      "tag": "0009_mushy_shriek",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791160831560,
+      "tag": "0010_romantic_stick",
+      "breakpoints": true
     }
   ]
 }

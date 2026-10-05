@@ -17,6 +17,8 @@
     "@milo/media": "workspace:*",
     "@milo/transcription": "workspace:*",
     "@milo/intelligence": "workspace:*",
-    "@milo/sharing": "workspace:*"
+    "@milo/sharing": "workspace:*",
+    "@milo/indexing": "workspace:*",
+    "@milo/search": "workspace:*"
   }
 }

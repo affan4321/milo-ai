@@ -1,5 +1,5 @@
 import {
-  pgTable, uuid, text, timestamp, integer, boolean, jsonb, index, uniqueIndex, vector, customType,
+  serial, pgTable, uuid, text, timestamp, integer, boolean, jsonb, index, uniqueIndex, vector, customType,
 } from "drizzle-orm/pg-core";
 
 const tsvector = customType<{ data: string }>({ dataType: () => "tsvector" });
@@ -56,6 +56,8 @@ export const meetings = pgTable("meetings", {
   calendarEventId: uuid("calendar_event_id").references(() => calendarEvents.id),
   title: text("title").notNull(), startedAt: timestamp("started_at", { withTimezone: true }),
   status: text("status").notNull().default("scheduled"), captureSource: text("capture_source").notNull().default("upload"),
+  /** "private" = only the owner; "team" = visible to the owner's workspace in Team calls, search and Ask. */
+  visibility: text("visibility").notNull().default("private"),
   createdAt: createdAt(),
 });
 export const botSessions = pgTable("bot_sessions", {
@@ -151,10 +153,13 @@ export const alertHits = pgTable("alert_hits", {
   meetingId: ref("meeting_id").references(() => meetings.id, { onDelete: "cascade" }), segmentId: uuid("segment_id"),
 });
 export const askThreads = pgTable("ask_threads", {
-  id: id(), userId: ref("user_id").references(() => users.id), scope: text("scope").notNull().default("my"), createdAt: createdAt(),
+  id: id(), userId: ref("user_id").references(() => users.id, { onDelete: "cascade" }), scope: text("scope").notNull().default("my"),
+  title: text("title"), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(), createdAt: createdAt(),
 });
 export const askMessages = pgTable("ask_messages", {
-  id: id(), threadId: ref("thread_id").references(() => askThreads.id, { onDelete: "cascade" }),
+  // `seq` gives messages a real order (ids are random uuids).
+  id: id(), seq: serial("seq"),
+  threadId: ref("thread_id").references(() => askThreads.id, { onDelete: "cascade" }),
   role: text("role").notNull(), content: text("content").notNull(), citedSegmentIds: jsonb("cited_segment_ids").$type<string[]>().default([]),
 });
 

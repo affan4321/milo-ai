@@ -1,0 +1,1 @@
+ALTER TABLE "meetings" ADD COLUMN "visibility" text DEFAULT 'private' NOT NULL;

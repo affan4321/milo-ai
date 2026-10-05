@@ -5,7 +5,7 @@ import { signOut } from "@/auth";
 import { getPrefs } from "@/lib/onboarding-state";
 import type { ReactNode } from "react";
 
-const nav = [["Home", "/home"], ["Search", "/search"], ["Playlists", "/playlists"], ["Alerts", "/alerts"], ["Settings", "/settings"]];
+const nav = [["Home", "/home"], ["Search", "/search"], ["Ask Milo", "/ask"], ["Playlists", "/playlists"], ["Alerts", "/alerts"], ["Settings", "/settings"]];
 
 export const dynamic = "force-dynamic";
 

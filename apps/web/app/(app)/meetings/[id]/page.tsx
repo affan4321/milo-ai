@@ -9,6 +9,7 @@ import { BUILT_IN_TEMPLATES, DEFAULT_TEMPLATE } from "@milo/intelligence";
 import { getCurrentUser } from "@/lib/session";
 import { MeetingView } from "./meeting-view";
 import { LivePanel } from "./live-panel";
+import { VisibilityToggle } from "./visibility-toggle";
 import { listClips, listHighlights } from "@milo/sharing";
 import { AutoRefresh } from "./auto-refresh";
 import { retryStageAction } from "./actions";
@@ -16,8 +17,10 @@ import { retryStageAction } from "./actions";
 export const dynamic = "force-dynamic";
 const STAGE_LABEL: Record<string, string> = { media: "Preparing recording", transcription: "Transcribing" };
 
-export default async function MeetingPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function MeetingPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ t?: string }> }) {
   const { id } = await params;
+  const tParam = Number((await searchParams).t);
+  const initialSeekMs = Number.isFinite(tParam) && tParam >= 0 ? Math.round(tParam) : undefined; // from a search result or an Ask citation
   const user = await getCurrentUser();
   const db = getDb();
   const [meeting] = await db.select().from(meetings).where(and(eq(meetings.id, id), eq(meetings.ownerId, user.id)));
@@ -30,7 +33,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
   const awaitingHandOver = !!bot && !rec && bot.state === "left";
   const stages = rec ? await db.select().from(pipelineStage).where(eq(pipelineStage.recordingId, rec.id)) : [];
   const stage = (s: string) => stages.find((x) => x.stage === s);
-  const media = stage("media"), tr = stage("transcription"), ins = stage("intelligence");
+  const media = stage("media"), tr = stage("transcription"), ins = stage("intelligence"), idx = stage("indexing");
   const busy = stages.some((s) => s.status === "pending" || s.status === "running");
 
   const playable = media?.status === "done" && rec?.playableKey;
@@ -79,6 +82,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
       <div>
         <Link href="/home" className="text-sm text-muted hover:text-text">← Home</Link>
         <h1 className="mt-1 text-2xl font-semibold">{meeting.title}</h1>
+        <div className="mt-1"><VisibilityToggle meetingId={id} visibility={meeting.visibility} /></div>
         <p className="text-sm text-muted">
           {meeting.createdAt.toLocaleString()}{rec?.durationMs ? ` · ${formatMs(rec.durationMs)}` : ""}{spk.length ? ` · ${spk.length} speakers` : ""}
         </p>
@@ -117,8 +121,15 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
           chapters={chs.map((c) => ({ id: c.id, title: c.title, startMs: c.startMs }))}
           actionItems={items.map((a) => ({ id: a.id, text: a.text, assignee: a.assignee, done: a.done, sourceMs: a.sourceMs })).sort((a, b) => (a.sourceMs ?? 0) - (b.sourceMs ?? 0))}
           templates={templateOpts} summaries={Object.fromEntries(sums.map((x) => [x.templateKey, x.content]))}
-          highlights={hlViews} clips={clipViews} durationMs={rec!.durationMs ?? 0}
+          initialSeekMs={initialSeekMs} highlights={hlViews} clips={clipViews} durationMs={rec!.durationMs ?? 0}
           defaultTemplate={prefs?.defaultTemplate ?? DEFAULT_TEMPLATE} insights={ins ? { status: ins.status, error: ins.error } : null} />
+      )}
+
+      {transcriptReady && idx?.status === "failed" && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+          <span className="font-medium">Search indexing failed</span>: this meeting won&apos;t show up in meaning-based search or Ask yet. {idx.error ? <span className="text-muted">{idx.error}</span> : null} The transcript, playback and summary still work.
+          <form action={async () => { "use server"; await retryStageAction(id, "indexing"); }} className="mt-2"><button className="rounded border border-border px-3 py-1">Retry</button></form>
+        </div>
       )}
 
       {playable && !transcriptReady && (

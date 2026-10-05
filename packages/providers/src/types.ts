@@ -25,14 +25,19 @@ export interface InsightsOut {
   actionItems: { text: string; assignee?: string; sourceMs?: number }[];
   chapters: { title: string; startMs: number }[];
 }
+export type EmbedTask = "document" | "query";
+export interface AnswerContext { id: string; text: string; ms: number; meeting: string; speaker?: string }
+export interface AnswerInput { question: string; history?: { role: "user" | "assistant"; content: string }[]; context: AnswerContext[] }
 export interface LlmInput { transcript: string; templatePrompt: string; durationMs: number }
 export interface LlmProvider {
   /** Summary + action items + chapters in one call. `transcript` lines look like "[t=754] Name: text" (t = seconds). */
   insights(args: LlmInput): Promise<InsightsOut>;
   /** Summary only, for switching templates after the first pass. */
   summarize(args: LlmInput): Promise<SummaryOut>;
-  embed(texts: string[]): Promise<number[][]>;
-  answer(args: { question: string; context: { id: string; text: string; ms: number }[] }): Promise<{ text: string; citedIds: string[] }>;
+  /** Unit-length vectors, one per text. `query` vs `document` lets the model treat questions and passages differently. */
+  embed(texts: string[], task?: EmbedTask): Promise<number[][]>;
+  /** Answer from the numbered excerpts only. `citedIds` are the excerpt ids actually used (a subset of the ids given). */
+  answer(args: AnswerInput): Promise<{ text: string; citedIds: string[] }>;
 }
 
 export interface CalendarEventOut {
