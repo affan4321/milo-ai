@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { signOut } from "@/auth";
 import { getPrefs } from "@/lib/onboarding-state";
+import { ThemeToggle } from "./theme-toggle";
 import type { ReactNode } from "react";
 
 const nav = [["Home", "/home"], ["Search", "/search"], ["Ask Milo", "/ask"], ["Playlists", "/playlists"], ["Alerts", "/alerts"], ["Settings", "/settings"]];
@@ -23,6 +24,7 @@ export default async function AppShell({ children }: { children: ReactNode }) {
         </nav>
         <div className="mt-8 border-t border-border pt-4 text-xs text-muted">
           <div className="truncate">{user.email}</div>
+          <ThemeToggle />
           {process.env.GOOGLE_CLIENT_ID && (
             <form action={async () => { "use server"; await signOut({ redirectTo: "/sign-in" }); }}>
               <button className="mt-1 underline hover:text-text">Sign out</button>

@@ -8,22 +8,24 @@
     "typecheck": "tsc -p ."
   },
   "dependencies": {
+    "@huggingface/transformers": "3.5.2",
     "@milo/calendar": "workspace:*",
     "@milo/core": "workspace:*",
     "@milo/db": "workspace:*",
+    "@milo/indexing": "workspace:*",
+    "@milo/intelligence": "workspace:*",
+    "@milo/notify": "workspace:*",
+    "@milo/playlists": "workspace:*",
     "@milo/providers": "workspace:*",
+    "@milo/search": "workspace:*",
+    "@milo/sharing": "workspace:*",
     "drizzle-orm": "^0.36.0",
     "next": "^15.1.0",
     "next-auth": "5.0.0-beta.32",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "onnxruntime-node": "1.21.0",
     "pg-boss": "^10.1.0",
-    "@milo/intelligence": "workspace:*",
-    "@milo/sharing": "workspace:*",
-    "@milo/indexing": "workspace:*",
-    "@milo/search": "workspace:*",
-    "@milo/notify": "workspace:*",
-    "@milo/playlists": "workspace:*"
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",

@@ -245,7 +245,7 @@ Each step ends with something demonstrable.
 | 8 | Search + Ask Milo | Cross-meeting search and cited answers |
 | 9 | Parity | Team Calls, Playlists, Alerts, auto-share recap email, settings/customize pages, Microsoft sign-in |
 | 10 | Teams join script | Bot on a third platform |
-| 11 | Polish + deploy | States, dark/light, hosted on a VM, walkthrough notes |
+| 11 | Polish + deploy | States, dark/light, hosted on a VM, walkthrough notes (built: see docs/DEPLOY.md, docs/WALKTHROUGH.md) |
 
 The bot comes after the pipeline on purpose: it needs somewhere to deliver a recording, and the upload path lets everything downstream be built and judged without waiting on the most fragile piece. If the bot stalls, the browser recorder is the working capture path while it is fixed.
 

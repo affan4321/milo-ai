@@ -1,0 +1,12 @@
+{$DOMAIN} {
+	encode gzip
+	# Recordings can be large; uploads stream straight through.
+	request_body { max_size 2GB }
+	reverse_proxy web:3000
+	# The bot/health endpoints are not secret, but internal-only ones should not be public.
+	@internal path /api/bot/*
+	handle @internal {
+		# The bot reaches web over the private network (WEB_URL=http://web:3000), never through the internet.
+		respond 404
+	}
+}

@@ -9,3 +9,5 @@ docs
 .claude
 .env
 *.log
+**/.next-*
+.data
