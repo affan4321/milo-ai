@@ -22,4 +22,8 @@ let e: any = await new ResendEmail({ apiKey: "k", from: "f", fetch: ok(429) }).s
 e = await new ResendEmail({ apiKey: "k", from: "f", fetch: ok(503) }).send({ to: "a@b.com", subject: "S", html: "h" }).catch((x) => x); check(e && !isPermanent(e), "5xx is retryable");
 e = await new ResendEmail({ apiKey: "k", from: "f", fetch: ok(422, { message: "domain not verified" }) }).send({ to: "a@b.com", subject: "S", html: "h" }).catch((x) => x); check(isPermanent(e) && /domain not verified/.test(e.message), "rejection (bad domain/address) is permanent with the reason");
 e = await new ResendEmail({ apiKey: "", from: "f", fetch: ok(200) }).send({ to: "a@b.com", subject: "S", html: "h" }).catch((x) => x); check(isPermanent(e), "missing key is permanent");
+// Read-only hosting (Vercel): building the provider must not touch the disk, and sending must fall back to a writable folder.
+let threw = false; let ro: OutboxEmail | undefined; try { ro = new OutboxEmail("/proc/not-writable/outbox"); } catch { threw = true; }
+check(!threw, "constructing the outbox on an unwritable path does not throw");
+await ro!.send({ to: "ro@x.com", subject: "S", html: "<p>x</p>" }); check(true, "sending falls back to a temp folder instead of failing");
 console.log(fails ? `${fails} FAILED` : "ok"); process.exit(fails ? 1 : 0);
