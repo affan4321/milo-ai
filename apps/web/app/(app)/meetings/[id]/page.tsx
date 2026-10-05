@@ -15,6 +15,9 @@ import { listPlaylists } from "@milo/playlists";
 import { listClips, listHighlights } from "@milo/sharing";
 import { AutoRefresh } from "./auto-refresh";
 import { retryStageAction } from "./actions";
+import { AlertTriangle, CalendarDays, ChevronLeft, Clock, RefreshCw, Users } from "lucide-react";
+import { Notice, Working } from "@/components/ui";
+import { whenLabel } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 const STAGE_LABEL: Record<string, string> = { media: "Preparing recording", transcription: "Transcribing" };
@@ -70,37 +73,39 @@ export default async function MeetingPage({ params, searchParams }: { params: Pr
   const hlViews = hls.map((h) => ({ id: h.id, startMs: h.startMs, endMs: h.endMs, note: h.note, source: h.source, createdBy: h.createdBy }));
 
   const failedCard = (s: typeof media, title: string) => s && (
-    <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm">
-      <div className="font-medium">{title} failed</div>
-      <p className="mt-1 text-muted">{s.error ?? "Something went wrong."}</p>
-      <form action={async () => { "use server"; await retryStageAction(id, s.stage); }}>
-        <button className="mt-3 rounded border border-border px-3 py-1.5">Retry</button>
-      </form>
-    </div>
+    <Notice tone="danger" icon={AlertTriangle} title={`${title} failed`} action={
+      <form action={async () => { "use server"; await retryStageAction(id, s.stage); }}><button className="btn btn-secondary btn-sm"><RefreshCw />Retry</button></form>
+    }>{s.error ?? "Something went wrong."}</Notice>
   );
 
   return (
     <div className="space-y-6">
       {(busy || botActive || awaitingHandOver || clipsBusy) && <AutoRefresh ms={botActive || awaitingHandOver ? 3000 : 2000} />}
-      <div>
-        <Link href="/home" className="text-sm text-muted hover:text-text">← Home</Link>
-        <h1 className="mt-1 text-2xl font-semibold">{meeting.title}</h1>
-        <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1"><VisibilityToggle meetingId={id} visibility={meeting.visibility} />{transcriptReady && <AddToPlaylist meetingId={id} playlists={myPlaylists} />}</div>
-        <p className="text-sm text-muted">
-          {meeting.createdAt.toLocaleString()}{rec?.durationMs ? ` · ${formatMs(rec.durationMs)}` : ""}{spk.length ? ` · ${spk.length} speakers` : ""}
-        </p>
-      </div>
+      <header>
+        <Link href="/home" className="-ml-1 mb-3 inline-flex items-center gap-1 text-sm text-muted hover:text-text"><ChevronLeft className="h-4 w-4" />Home</Link>
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold tracking-tight text-balance">{meeting.title}</h1>
+            <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
+              <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-4 w-4 text-subtle" />{whenLabel(meeting.createdAt)}</span>
+              {rec?.durationMs ? <span className="inline-flex items-center gap-1.5"><Clock className="h-4 w-4 text-subtle" />{formatMs(rec.durationMs)}</span> : null}
+              {spk.length ? <span className="inline-flex items-center gap-1.5"><Users className="h-4 w-4 text-subtle" />{spk.length} {spk.length === 1 ? "speaker" : "speakers"}</span> : null}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2"><VisibilityToggle meetingId={id} visibility={meeting.visibility} />{transcriptReady && <AddToPlaylist meetingId={id} playlists={myPlaylists} />}</div>
+        </div>
+      </header>
 
       {bot && !rec && (
-        <div className={`rounded-lg border p-5 text-sm ${bot.state === "failed" ? "border-red-500/40 bg-red-500/10" : "border-accent/40 bg-accent/10"}`}>
-          <div className="flex items-center gap-2 font-medium">
-            {botActive && <span className={`h-2.5 w-2.5 rounded-full ${bot.state === "recording" ? "animate-pulse bg-red-500" : "bg-amber-500"}`} />}
+        <div className={`rounded-[14px] border p-5 text-sm ${bot.state === "failed" ? "border-danger/30 bg-danger/[0.07]" : "border-accent/40 bg-accent/[0.07]"}`}>
+          <div className="flex items-center gap-2.5 text-base font-medium">
+            {botActive && <span className={`h-2.5 w-2.5 rounded-full ${bot.state === "recording" ? "animate-pulse bg-danger" : "bg-warn"}`} />}
             {bot.state === "failed" ? BOT_STATE_TEXT.failed : botStatusText(bot, cap)}
           </div>
           {bot.state === "failed" && (
             <>
               <p className="mt-2">{botReasonText(bot.reason)}</p>
-              <p className="mt-1 text-muted">Nothing was recorded. You can <Link href="/home" className="underline">upload a recording of this meeting</Link> instead.</p>
+              <p className="mt-1 text-muted">Nothing was recorded. You can <Link href="/home" className="link">upload a recording of this meeting</Link> instead.</p>
             </>
           )}
           {bot.state === "left" && <p className="mt-2 text-muted">Processing the recording… this page updates when it's ready.</p>}
@@ -113,9 +118,7 @@ export default async function MeetingPage({ params, searchParams }: { params: Pr
       )}
 
       {media?.status === "failed" && failedCard(media, STAGE_LABEL.media!)}
-      {media && media.status !== "done" && media.status !== "failed" && (
-        <div className="rounded-lg border border-border bg-surface p-6 text-sm text-muted">{STAGE_LABEL.media}… the player appears as soon as this finishes.</div>
-      )}
+      {media && media.status !== "done" && media.status !== "failed" && <Working title={`${STAGE_LABEL.media}…`}>The player appears as soon as this finishes.</Working>}
 
       {playable && transcriptReady && (
         <MeetingView meetingId={id} mediaUrl={`/api/media/${rec!.id}`} isVideo={rec!.playableKey!.endsWith(".mp4")}
@@ -129,21 +132,18 @@ export default async function MeetingPage({ params, searchParams }: { params: Pr
       )}
 
       {transcriptReady && idx?.status === "failed" && (
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-          <span className="font-medium">Search indexing failed</span>: this meeting won&apos;t show up in meaning-based search or Ask yet. {idx.error ? <span className="text-muted">{idx.error}</span> : null} The transcript, playback and summary still work.
-          <form action={async () => { "use server"; await retryStageAction(id, "indexing"); }} className="mt-2"><button className="rounded border border-border px-3 py-1">Retry</button></form>
-        </div>
+        <Notice icon={AlertTriangle} title="Search indexing failed" action={
+          <form action={async () => { "use server"; await retryStageAction(id, "indexing"); }}><button className="btn btn-secondary btn-sm"><RefreshCw />Retry</button></form>
+        }>This meeting won&apos;t show up in meaning-based search or Ask yet. {idx.error} The transcript, playback and summary still work.</Notice>
       )}
 
       {playable && !transcriptReady && (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {rec!.playableKey!.endsWith(".mp4")
-            ? <video src={`/api/media/${rec!.id}`} controls preload="metadata" className="w-full rounded-lg bg-black" />
+            ? <video src={`/api/media/${rec!.id}`} controls preload="metadata" className="aspect-video w-full rounded-[14px] bg-black shadow-pop" />
             : <audio src={`/api/media/${rec!.id}`} controls className="w-full" />}
           <div>
-            {tr?.status === "failed" ? failedCard(tr, STAGE_LABEL.transcription!) : (
-              <div className="rounded-lg border border-border bg-surface p-6 text-sm text-muted">{STAGE_LABEL.transcription}… the transcript will appear here.</div>
-            )}
+            {tr?.status === "failed" ? failedCard(tr, STAGE_LABEL.transcription!) : <Working title={`${STAGE_LABEL.transcription}…`}>The transcript will appear here.</Working>}
           </div>
         </div>
       )}

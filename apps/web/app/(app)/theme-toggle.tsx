@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
+import { Monitor, Moon, Sun } from "lucide-react";
 
 type Theme = "system" | "light" | "dark";
-const NEXT: Record<Theme, Theme> = { system: "light", light: "dark", dark: "system" };
+const OPTIONS = [["system", Monitor, "Match device"], ["light", Sun, "Light"], ["dark", Moon, "Dark"]] as const;
 
 export function ThemeToggle() {
   const [theme, setTheme] = useState<Theme>("system");
@@ -13,8 +14,13 @@ export function ThemeToggle() {
     if (t === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
   };
   return (
-    <button onClick={() => apply(NEXT[theme])} className="mt-2 block underline hover:text-text" aria-label={`Theme: ${theme}. Click to change.`}>
-      Theme: {theme}
-    </button>
+    <div role="radiogroup" aria-label="Theme" className="inline-flex rounded-lg border border-border bg-bg p-0.5">
+      {OPTIONS.map(([value, I, label]) => (
+        <button key={value} role="radio" aria-checked={theme === value} aria-label={label} title={label} onClick={() => apply(value)}
+          className={`flex h-6 w-7 items-center justify-center rounded-md transition-colors ${theme === value ? "bg-surface text-text shadow-card" : "text-subtle hover:text-text"}`}>
+          <I className="h-3.5 w-3.5" />
+        </button>
+      ))}
+    </div>
   );
 }

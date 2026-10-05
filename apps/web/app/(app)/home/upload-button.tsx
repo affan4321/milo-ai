@@ -1,6 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Upload } from "lucide-react";
 
 export function UploadButton() {
   const input = useRef<HTMLInputElement>(null);
@@ -45,15 +46,14 @@ export function UploadButton() {
   }
 
   return (
-    <div className="space-y-2">
+    <div className="relative">
       <input ref={input} type="file" accept="video/*,audio/*,.mkv,.m4a" hidden
         onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ""; }} />
-      <button onClick={() => input.current?.click()} disabled={pct !== null}
-        className="rounded border border-border px-4 py-2 text-sm disabled:opacity-60">
-        {pct === null ? "Upload a recording" : pct < 100 ? `Uploading… ${pct}%` : "Finishing upload…"}
+      <button onClick={() => input.current?.click()} disabled={pct !== null} className="btn btn-secondary relative overflow-hidden disabled:opacity-100">
+        {pct !== null && <span className="absolute inset-y-0 left-0 bg-accent/15 transition-[width]" style={{ width: `${pct}%` }} />}
+        <Upload className="relative" /><span className="relative">{pct === null ? "Upload a recording" : pct < 100 ? `Uploading… ${pct}%` : "Finishing upload…"}</span>
       </button>
-      {pct !== null && <div className="h-1 w-48 overflow-hidden rounded bg-border"><div className="h-full bg-accent" style={{ width: `${pct}%` }} /></div>}
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {error && <p className="absolute right-0 top-full z-10 mt-2 w-64 rounded-lg border border-danger/30 bg-surface p-2.5 text-xs text-danger shadow-pop" role="alert">{error}</p>}
     </div>
   );
 }

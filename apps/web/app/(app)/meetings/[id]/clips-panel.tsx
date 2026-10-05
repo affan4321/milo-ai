@@ -1,5 +1,6 @@
 "use client";
 import { useState, useTransition } from "react";
+import { Check, Copy, Link2 } from "lucide-react";
 import { formatMs } from "@milo/core";
 import { revokeClipShareAction, shareClipAction } from "./actions";
 
@@ -22,28 +23,27 @@ export function ClipsPanel({ clips }: { clips: ClipView[] }) {
   }
   return (
     <div>
-      <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Clips</h3>
-      <ul className="space-y-1.5 text-sm">
+      <ul className="space-y-2 text-sm">
         {clips.map((c) => (
-          <li key={c.id} className="rounded border border-border p-2">
-            <div className="flex items-center justify-between gap-2">
-              <span className="min-w-0 truncate">{c.title ?? "Clip"} <span className="font-mono text-xs text-muted">{formatMs(c.startMs)}–{formatMs(c.endMs)}</span></span>
-              {c.status === "pending" && <span className="shrink-0 text-xs text-muted">Preparing…</span>}
-              {c.status === "failed" && <span className="shrink-0 text-xs text-red-500" title={c.error ?? ""}>Failed</span>}
-              {c.status === "ready" && !c.token && <button disabled={pending} onClick={() => share(c)} className="shrink-0 rounded bg-accent px-2 py-1 text-xs font-medium text-white disabled:opacity-60">Get public link</button>}
+          <li key={c.id} className="rounded-lg border border-border bg-bg p-2.5 pl-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="min-w-0 truncate font-medium">{c.title ?? "Clip"} <span className="ml-1 font-mono text-xs font-normal text-subtle">{formatMs(c.startMs)}–{formatMs(c.endMs)}</span></span>
+              {c.status === "pending" && <span className="flex shrink-0 items-center gap-1.5 text-xs text-warn"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />Preparing…</span>}
+              {c.status === "failed" && <span className="shrink-0 text-xs font-medium text-danger" title={c.error ?? ""}>Failed</span>}
+              {c.status === "ready" && !c.token && <button disabled={pending} onClick={() => share(c)} className="btn btn-primary btn-sm"><Link2 />Get public link</button>}
               {c.status === "ready" && c.token && (
-                <span className="flex shrink-0 gap-2 text-xs">
-                  <button onClick={() => copy(c.token!, c.id)} className="rounded border border-border px-2 py-1 hover:border-accent">{copied === c.id ? "Copied" : "Copy link"}</button>
-                  <button disabled={pending} onClick={() => start(() => revokeClipShareAction(c.id))} className="text-muted underline hover:text-text">Turn off</button>
+                <span className="flex shrink-0 gap-1">
+                  <button onClick={() => copy(c.token!, c.id)} className="btn btn-secondary btn-sm">{copied === c.id ? <><Check />Copied</> : <><Copy />Copy link</>}</button>
+                  <button disabled={pending} onClick={() => start(() => revokeClipShareAction(c.id))} className="btn btn-ghost btn-danger btn-sm">Turn off</button>
                 </span>
               )}
             </div>
-            {c.status === "ready" && c.token && <div className="mt-1 break-all font-mono text-[11px] text-muted">…/share/{c.token.slice(0, 8)}… · {c.views} {c.views === 1 ? "view" : "views"}</div>}
+            {c.status === "ready" && c.token && <div className="mt-1 break-all font-mono text-[11px] text-subtle">…/share/{c.token.slice(0, 8)}… · {c.views} {c.views === 1 ? "view" : "views"}</div>}
             {c.status === "failed" && <div className="mt-1 text-xs text-muted">{c.error}</div>}
           </li>
         ))}
       </ul>
-      {err && <p className="mt-1 text-xs text-red-500">{err}</p>}
+      {err && <p className="mt-2 text-xs text-danger">{err}</p>}
     </div>
   );
 }

@@ -1,5 +1,7 @@
 "use client";
-import { memo, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
+import { motion } from "motion/react";
+import { ArrowDownToLine, BookOpen, Film, ListChecks, ScrollText, Scissors, Star, Trash2, Users, type LucideIcon } from "lucide-react";
 import { formatMs } from "@milo/core";
 import { renameSpeakerAction } from "./actions";
 import type { HighlightView } from "./live-panel";
@@ -18,8 +20,8 @@ const Line = memo(function Line({ seg, index, speaker, hue, active, selected, on
 }) {
   return (
     <button data-seg={seg.id} onClick={(e) => onPick(index, e.shiftKey)}
-      className={`flex w-full gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors ${selected ? "bg-amber-400/20 ring-1 ring-amber-400/50" : active ? "bg-accent/15" : "hover:bg-bg"}`}>
-      <span className="w-12 shrink-0 pt-0.5 font-mono text-xs text-muted">{formatMs(seg.startMs)}</span>
+      className={`flex w-full gap-3 rounded-lg border-l-2 px-3 py-2 text-left text-sm leading-relaxed transition-colors ${selected ? "border-warn bg-warn/15" : active ? "border-accent bg-accent/10" : "border-transparent hover:bg-raised"}`}>
+      <span className={`w-12 shrink-0 pt-0.5 font-mono text-xs ${active ? "text-accent-ink" : "text-subtle"}`}>{formatMs(seg.startMs)}</span>
       <span>
         <span className="mr-2 text-xs font-semibold" style={{ color: hue }}>{speaker}</span>
         <span>{seg.text}</span>
@@ -30,6 +32,19 @@ const Line = memo(function Line({ seg, index, speaker, hue, active, selected, on
 
 export interface ChapterView { id: string; title: string; startMs: number }
 type Tab = "summary" | "actions" | "transcript";
+
+/** One titled block in the column beside the player. */
+function Panel({ icon: I, title, aside, children }: { icon: LucideIcon; title: string; aside?: ReactNode; children: ReactNode }) {
+  return (
+    <section className="card p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h3 className="flex items-center gap-2 text-sm font-semibold"><I className="h-4 w-4 text-subtle" />{title}</h3>
+        {aside}
+      </div>
+      {children}
+    </section>
+  );
+}
 
 export function MeetingView({ meetingId, mediaUrl, isVideo, speakers, segments, chapters, actionItems, templates, summaries, defaultTemplate, insights, highlights, clips, durationMs, initialSeekMs, playlists }: {
   meetingId: string; mediaUrl: string; isVideo: boolean; speakers: SpeakerView[]; segments: SegmentView[];
@@ -107,105 +122,113 @@ export function MeetingView({ meetingId, mediaUrl, isVideo, speakers, segments, 
   }
 
   const total = speakers.reduce((a, s) => a + s.talkTimeMs, 0) || 1;
+  const tabs = [["summary", "Summary", BookOpen], ["actions", `Action items${actionItems.length ? ` (${actionItems.length})` : ""}`, ListChecks], ["transcript", "Transcript", ScrollText]] as const;
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-      <div className="space-y-4 lg:sticky lg:top-6 lg:self-start">
-        {isVideo
-          ? <video ref={media} src={mediaUrl} controls preload="metadata" onTimeUpdate={onTime} onSeeked={onTime} className="w-full rounded-lg bg-black" />
-          : <audio ref={media} src={mediaUrl} controls preload="metadata" onTimeUpdate={onTime} onSeeked={onTime} className="w-full" />}
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+      <div className="min-w-0 space-y-4 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:self-start lg:overflow-y-auto lg:pr-1">
+        <div className="overflow-hidden rounded-[14px] border border-border bg-surface shadow-pop">
+          {isVideo
+            ? <video ref={media} src={mediaUrl} controls preload="metadata" onTimeUpdate={onTime} onSeeked={onTime} className="aspect-video w-full bg-black" />
+            : <div className="bg-gradient-to-br from-accent/15 to-transparent p-5"><audio ref={media} src={mediaUrl} controls preload="metadata" onTimeUpdate={onTime} onSeeked={onTime} className="w-full" /></div>}
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-border px-4 py-2.5 text-sm">
+            <span className="min-w-0 flex-[1_1_8rem] truncate text-muted">{chapterAt >= 0 ? chapters[chapterAt]!.title : "Playback"}</span>
+            <div role="radiogroup" aria-label="Playback speed" className="flex shrink-0 rounded-lg bg-raised p-0.5">
+              {[0.75, 1, 1.25, 1.5, 2].map((r) => (
+                <button key={r} role="radio" aria-checked={rate === r} onClick={() => setRate(r)}
+                  className={`rounded-md px-2 py-1 text-xs tabular-nums transition-colors ${rate === r ? "bg-surface font-medium text-text shadow-card" : "text-muted hover:text-text"}`}>{r}×</button>
+              ))}
+            </div>
+          </div>
+        </div>
+        {toast && <p className={`rounded-lg border px-3 py-2 text-sm ${toast.bad ? "border-danger/30 bg-danger/[0.07] text-danger" : "border-accent/30 bg-accent/[0.07] text-muted"}`} role="status">{toast.text}</p>}
         {durationMs > 0 && highlights.length > 0 && (
-          <div>
-            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Highlights</h3>
+          <Panel icon={Star} title="Highlights" aside={<span className="text-xs text-subtle">{highlights.length}</span>}>
             {/* Position markers on the recording's timeline: click one to jump to it. */}
-            <div className="relative mb-2 h-3 rounded bg-border/60">
+            <div className="relative mb-3 h-2 rounded-full bg-raised">
               {highlights.map((h) => (
                 <button key={h.id} onClick={() => seek(h.startMs)} title={h.note ?? "Highlight"} aria-label={`Highlight at ${formatMs(h.startMs)}`}
-                  className="absolute top-0 h-3 min-w-1 rounded-sm bg-amber-400 hover:bg-amber-300"
+                  className="absolute top-0 h-2 min-w-1.5 rounded-full bg-warn transition-transform hover:scale-y-150"
                   style={{ left: `${(h.startMs / durationMs) * 100}%`, width: `${Math.max(0.6, ((h.endMs - h.startMs) / durationMs) * 100)}%` }} />
               ))}
             </div>
-            <ul className="max-h-40 space-y-0.5 overflow-y-auto text-sm">
+            <ul className="-mx-1 max-h-44 space-y-0.5 overflow-y-auto text-sm">
               {highlights.map((h) => (
-                <li key={h.id} className="group flex items-center">
-                  <button onClick={() => seek(h.startMs)} className="flex flex-1 gap-2 rounded px-2 py-1 text-left hover:bg-bg">
-                    <span className="w-24 shrink-0 font-mono text-xs text-muted">{formatMs(h.startMs)}–{formatMs(h.endMs)}</span>
-                    <span>{h.note ?? "Highlight"}<span className="ml-2 text-xs text-muted">{h.createdBy ?? ""}</span></span>
+                <li key={h.id} className="group flex flex-wrap items-center justify-end rounded-lg hover:bg-raised">
+                  <button onClick={() => seek(h.startMs)} className="flex min-w-0 flex-[1_1_12rem] items-baseline gap-2.5 px-2 py-1.5 text-left">
+                    <span className="shrink-0 font-mono text-xs text-accent-ink">{formatMs(h.startMs)}–{formatMs(h.endMs)}</span>
+                    <span className="min-w-0 truncate">{h.note ?? "Highlight"}<span className="ml-2 text-xs text-subtle">{h.createdBy ?? ""}</span></span>
                   </button>
-                  <span className="px-2"><AddToPlaylist meetingId={meetingId} playlists={playlists} range={{ startMs: h.startMs, endMs: h.endMs }} label="+ Playlist" /></span>
-                  <button disabled={clipping} onClick={() => makeClip(h.startMs, h.endMs, h.note ?? undefined)} className="px-2 text-xs text-accent hover:underline disabled:opacity-60">Clip</button>
-                  <button onClick={() => deleteHighlightAction(meetingId, h.id)} className="invisible px-2 text-xs text-muted hover:text-text group-hover:visible">Remove</button>
+                  <AddToPlaylist meetingId={meetingId} playlists={playlists} range={{ startMs: h.startMs, endMs: h.endMs }} label="Playlist" />
+                  <button disabled={clipping} onClick={() => makeClip(h.startMs, h.endMs, h.note ?? undefined)} className="btn btn-ghost btn-sm"><Scissors />Clip</button>
+                  <button onClick={() => deleteHighlightAction(meetingId, h.id)} title="Remove highlight" aria-label="Remove highlight" className="btn btn-ghost btn-danger btn-sm btn-icon opacity-0 focus-visible:opacity-100 group-hover:opacity-100"><Trash2 /></button>
                 </li>
               ))}
             </ul>
-          </div>
+          </Panel>
         )}
-        <ClipsPanel clips={clips} />
-        {toast && <p className={`text-xs ${toast.bad ? "text-red-500" : "text-muted"}`}>{toast.text}</p>}
+        {clips.length > 0 && <Panel icon={Film} title="Clips"><ClipsPanel clips={clips} /></Panel>}
         {chapters.length > 0 && (
-          <div>
-            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Chapters</h3>
-            <ol className="max-h-40 space-y-0.5 overflow-y-auto text-sm">
+          <Panel icon={BookOpen} title="Chapters">
+            <ol className="-mx-1 max-h-48 space-y-0.5 overflow-y-auto text-sm">
               {chapters.map((c, i) => (
                 <li key={c.id}>
-                  <button onClick={() => seek(c.startMs)} className={`flex w-full gap-2 rounded px-2 py-1 text-left hover:bg-bg ${i === chapterAt ? "bg-accent/15" : ""}`}>
-                    <span className="w-12 shrink-0 font-mono text-xs text-muted">{formatMs(c.startMs)}</span><span>{c.title}</span>
+                  <button onClick={() => seek(c.startMs)} className={`flex w-full items-baseline gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors ${i === chapterAt ? "bg-accent/10 font-medium text-accent-ink" : "hover:bg-raised"}`}>
+                    <span className={`w-12 shrink-0 font-mono text-xs ${i === chapterAt ? "" : "text-subtle"}`}>{formatMs(c.startMs)}</span><span>{c.title}</span>
                   </button>
                 </li>
               ))}
             </ol>
-          </div>
+          </Panel>
         )}
-        <div className="flex items-center gap-3 text-sm">
-          <label className="text-muted">Speed</label>
-          <select value={rate} onChange={(e) => setRate(Number(e.target.value))} className="rounded border border-border bg-surface px-2 py-1">
-            {[0.75, 1, 1.25, 1.5, 2].map((r) => <option key={r} value={r}>{r}×</option>)}
-          </select>
-        </div>
-        <div>
-          <div className="mb-2 flex h-2 overflow-hidden rounded">
-            {speakers.map((s, i) => <div key={s.id} title={`${s.name} · ${Math.round((s.talkTimeMs / total) * 100)}%`} style={{ width: `${(s.talkTimeMs / total) * 100}%`, background: color(i) }} />)}
-          </div>
-          <div className="flex flex-wrap gap-2 text-xs">
-            {speakers.map((s, i) => (
-              <button key={s.id} onClick={() => rename(s)} title="Rename speaker" className="flex items-center gap-1.5 rounded-full border border-border px-2 py-1 hover:border-accent">
-                <span className="h-2 w-2 rounded-full" style={{ background: color(i) }} />{s.name}
-                <span className="text-muted">{Math.round((s.talkTimeMs / total) * 100)}%</span>
-              </button>
-            ))}
-          </div>
-        </div>
+        {speakers.length > 0 && (
+          <Panel icon={Users} title="Talk time" aside={<span className="text-xs text-subtle">Click a name to rename</span>}>
+            <div className="mb-3 flex h-2 gap-0.5 overflow-hidden rounded-full">
+              {speakers.map((s, i) => <div key={s.id} title={`${s.name} · ${Math.round((s.talkTimeMs / total) * 100)}%`} style={{ width: `${(s.talkTimeMs / total) * 100}%`, background: color(i) }} />)}
+            </div>
+            <div className="flex flex-wrap gap-1.5 text-xs">
+              {speakers.map((s, i) => (
+                <button key={s.id} onClick={() => rename(s)} title="Rename speaker" className="flex items-center gap-1.5 rounded-full border border-border bg-bg px-2.5 py-1 transition-colors hover:border-accent">
+                  <span className="h-2 w-2 rounded-full" style={{ background: color(i) }} />{s.name}
+                  <span className="tabular-nums text-subtle">{Math.round((s.talkTimeMs / total) * 100)}%</span>
+                </button>
+              ))}
+            </div>
+          </Panel>
+        )}
       </div>
-      <div>
-        <div className="mb-3 flex gap-1 border-b border-border text-sm">
-          {([["summary", "Summary"], ["actions", `Action items${actionItems.length ? ` (${actionItems.length})` : ""}`], ["transcript", "Transcript"]] as const).map(([k, label]) => (
-            <button key={k} onClick={() => setTab(k)} className={`-mb-px border-b-2 px-3 py-2 ${tab === k ? "border-accent text-text" : "border-transparent text-muted hover:text-text"}`}>{label}</button>
+      <div className="min-w-0">
+        <div className="mb-4 flex gap-1 overflow-x-auto border-b border-border text-sm [scrollbar-width:none]" role="tablist">
+          {tabs.map(([k, label, I]) => (
+            <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={`relative flex shrink-0 items-center gap-2 whitespace-nowrap px-3 py-2.5 transition-colors ${tab === k ? "font-medium text-text" : "text-muted hover:text-text"}`}>
+              <I className="h-4 w-4" />{label}
+              {tab === k && <motion.span layoutId="meeting-tab" className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-accent" transition={{ type: "spring", stiffness: 500, damping: 40 }} />}
+            </button>
           ))}
         </div>
         {tab === "summary" && <SummaryPanel key={Object.keys(summaries).sort().join()} meetingId={meetingId} templates={templates} initial={summaries} initialKey={summaries[defaultTemplate] ? defaultTemplate : Object.keys(summaries)[0] ?? defaultTemplate} stage={insights} onSeek={seek} />}
         {tab === "actions" && <ActionItemsPanel key={actionItems.map((a) => a.id).join()} meetingId={meetingId} items={actionItems} stage={insights} onSeek={seek} />}
         <div hidden={tab !== "transcript"}>
-          <p className="mb-1 text-xs text-muted">Click a line to jump to it. Shift-click another line to select a stretch and make a clip.</p>
-          {selRange && (
-            <div className="mb-2 flex items-center justify-between gap-2 rounded border border-amber-400/50 bg-amber-400/10 px-3 py-2 text-sm">
-              <span>Selected {formatMs(selRange.startMs)}–{formatMs(selRange.endMs)}</span>
+          {selRange ? (
+            <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-warn/40 bg-warn/10 px-4 py-2.5 text-sm">
+              <span>Selected <span className="font-mono">{formatMs(selRange.startMs)}–{formatMs(selRange.endMs)}</span></span>
               <span className="flex gap-2">
-                <button disabled={clipping} onClick={() => makeClip(selRange.startMs, selRange.endMs)} className="rounded bg-accent px-3 py-1 text-xs font-medium text-white disabled:opacity-60">{clipping ? "Creating…" : "Create clip"}</button>
-                <button onClick={() => setSel(null)} className="text-xs text-muted underline">Clear</button>
+                <button disabled={clipping} onClick={() => makeClip(selRange.startMs, selRange.endMs)} className="btn btn-primary btn-sm"><Scissors />{clipping ? "Creating…" : "Create clip"}</button>
+                <button onClick={() => setSel(null)} className="btn btn-ghost btn-sm">Clear</button>
               </span>
             </div>
-          )}
-      <div className="relative">
-        {!follow && (
-          <button onClick={() => { setFollow(true); onTime(); }} className="absolute right-3 top-2 z-10 rounded-full bg-accent px-3 py-1 text-xs font-medium text-white shadow">Jump to current</button>
-        )}
-        <div ref={list} onWheel={() => setFollow(false)} onTouchMove={() => setFollow(false)}
-          className="relative h-[70vh] overflow-y-auto rounded-lg border border-border bg-surface p-2">
-          {segments.map((seg, i) => {
-            const sp = bySpeaker.get(seg.speakerId);
-            return <Line key={seg.id} seg={seg} index={i} speaker={sp?.name ?? "Unknown"} hue={sp?.hue ?? "gray"} active={i === active} selected={!!sel && i >= sel.a && i <= sel.b} onPick={pick} />;
-          })}
-        </div>
-      </div>
+          ) : <p className="mb-3 text-xs text-muted">Click a line to jump to it. Shift-click another line to select a stretch and make a clip.</p>}
+          <div className="relative">
+            {!follow && (
+              <button onClick={() => { setFollow(true); onTime(); }} className="btn btn-primary btn-sm absolute right-4 top-3 z-10 rounded-full shadow-pop"><ArrowDownToLine />Jump to current</button>
+            )}
+            <div ref={list} onWheel={() => setFollow(false)} onTouchMove={() => setFollow(false)}
+              className="card relative h-[70vh] overflow-y-auto p-1.5 sm:p-2">
+              {segments.map((seg, i) => {
+                const sp = bySpeaker.get(seg.speakerId);
+                return <Line key={seg.id} seg={seg} index={i} speaker={sp?.name ?? "Unknown"} hue={sp?.hue ?? "gray"} active={i === active} selected={!!sel && i >= sel.a && i <= sel.b} onPick={pick} />;
+              })}
+            </div>
+          </div>
         </div>
       </div>
     </div>

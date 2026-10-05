@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useTransition } from "react";
+import { Plus, Trash2 } from "lucide-react";
 import { deleteChatAction } from "./actions";
 
 const SCOPE: Record<string, string> = { my: "My calls", team: "Team", all: "All calls" };
@@ -22,18 +23,18 @@ export function ChatList({ threads }: { threads: { id: string; title: string; sc
     start(async () => { await deleteChatAction(id); if (id === threadId) router.push(`/ask?n=${Date.now()}`); });
   }
   return (
-    <aside className="w-full shrink-0 md:w-60">
-      <button onClick={newChat} className="mb-3 w-full rounded bg-accent px-3 py-2 text-sm font-medium text-white">+ New chat</button>
-      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Your chats</div>
-      {threads.length === 0 && <p className="text-xs text-muted">Chats you start are saved here, so you can come back to them.</p>}
-      <ul className="max-h-48 space-y-0.5 overflow-y-auto md:max-h-[70vh]">
+    <aside className="flex w-full shrink-0 flex-col lg:w-64">
+      <button onClick={newChat} className="btn btn-primary w-full"><Plus />New chat</button>
+      <div className="eyebrow mb-2 mt-6 px-1">Your chats</div>
+      {threads.length === 0 && <p className="px-1 text-sm leading-relaxed text-muted">Chats you start are saved here, so you can come back to them.</p>}
+      <ul className="-mx-1 max-h-44 space-y-0.5 overflow-y-auto px-1 lg:max-h-none lg:flex-1">
         {threads.map((t) => (
-          <li key={t.id} className={`group flex items-start gap-1 rounded ${t.id === threadId ? "bg-accent/15" : "hover:bg-surface"}`}>
-            <Link href={`/ask/${t.id}`} className="min-w-0 flex-1 px-2 py-1.5">
-              <div className="truncate text-sm">{t.title}</div>
-              <div className="text-[11px] text-muted">{SCOPE[t.scope] ?? t.scope} · {ago(t.updatedAt)}</div>
+          <li key={t.id} className={`group flex items-start rounded-lg transition-colors ${t.id === threadId ? "bg-accent/10" : "hover:bg-raised"}`}>
+            <Link href={`/ask/${t.id}`} className="min-w-0 flex-1 px-3 py-2">
+              <div className={`truncate text-sm ${t.id === threadId ? "font-medium text-accent-ink" : ""}`}>{t.title}</div>
+              <div className="mt-0.5 text-[11px] text-subtle">{SCOPE[t.scope] ?? t.scope} · {ago(t.updatedAt)}</div>
             </Link>
-            <button disabled={pending} onClick={() => remove(t.id, t.title)} title="Delete chat" aria-label="Delete chat" className="invisible px-2 py-1.5 text-xs text-muted hover:text-red-500 group-hover:visible">✕</button>
+            <button disabled={pending} onClick={() => remove(t.id, t.title)} title="Delete chat" aria-label="Delete chat" className="btn btn-ghost btn-danger btn-sm btn-icon m-1 opacity-0 focus-visible:opacity-100 group-hover:opacity-100"><Trash2 /></button>
           </li>
         ))}
       </ul>

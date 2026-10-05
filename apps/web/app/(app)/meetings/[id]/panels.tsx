@@ -1,6 +1,8 @@
 "use client";
 import { useState, useTransition } from "react";
+import { Check, Copy, RefreshCw } from "lucide-react";
 import { formatMs } from "@milo/core";
+import { Notice, Working } from "@/components/ui";
 import { createTemplateAction, getSummaryAction, retryStageAction, toggleActionItemAction } from "./actions";
 
 export interface SummaryContent { sections: { heading: string; bullets: { text: string; ms?: number }[] }[] }
@@ -13,19 +15,16 @@ const CUSTOM = "__custom__";
 export function TimeChip({ ms, onSeek }: { ms: number; onSeek: (ms: number) => void }) {
   return (
     <button onClick={() => onSeek(ms)} title="Jump to this moment"
-      className="ml-1.5 rounded bg-accent/15 px-1.5 py-0.5 align-baseline font-mono text-[11px] text-accent hover:bg-accent/25">{formatMs(ms)}</button>
+      className="ml-1.5 rounded bg-accent/10 px-1.5 py-0.5 align-baseline font-mono text-[11px] text-accent-ink transition-colors hover:bg-accent hover:text-white">{formatMs(ms)}</button>
   );
 }
 
 function Failed({ title, error, meetingId, stage }: { title: string; error: string | null; meetingId: string; stage: string }) {
   const [pending, start] = useTransition();
   return (
-    <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm">
-      <div className="font-medium">{title}</div>
-      <p className="mt-1 text-muted">{error ?? "Something went wrong."}</p>
-      <p className="mt-1 text-xs text-muted">The transcript and playback still work.</p>
-      <button disabled={pending} onClick={() => start(() => retryStageAction(meetingId, stage))} className="mt-3 rounded border border-border px-3 py-1.5 disabled:opacity-60">{pending ? "Retrying…" : "Retry"}</button>
-    </div>
+    <Notice tone="danger" title={title} action={<button disabled={pending} onClick={() => start(() => retryStageAction(meetingId, stage))} className="btn btn-secondary btn-sm"><RefreshCw />{pending ? "Retrying…" : "Retry"}</button>}>
+      {error ?? "Something went wrong."} The transcript and playback still work.
+    </Notice>
   );
 }
 
@@ -57,42 +56,46 @@ export function SummaryPanel({ meetingId, templates: initialTemplates, initial, 
   // First-pass states come from the pipeline stage; once any summary exists the template picker takes over.
   const hasAny = Object.keys(cache).length > 0;
   if (!hasAny && stage?.status === "failed") return <Failed title="Summary failed" error={stage.error} meetingId={meetingId} stage="intelligence" />;
-  if (!hasAny && (!stage || stage.status !== "done")) return <div className="rounded-lg border border-border bg-surface p-6 text-sm text-muted">Writing the summary… it will appear here when it's ready.</div>;
+  if (!hasAny && (!stage || stage.status !== "done")) return <Working title="Writing the summary…">It will appear here when it's ready.</Working>;
 
   const content = cache[key];
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        <label className="text-muted" htmlFor="tpl">Template</label>
-        <select id="tpl" value={key} disabled={busy} onChange={(e) => (e.target.value === CUSTOM ? setForm({ name: "", prompt: "" }) : load(e.target.value))}
-          className="rounded border border-border bg-surface px-2 py-1">
-          {templates.map((t) => <option key={t.key} value={t.key}>{t.name}{cache[t.key] ? "" : " ·"}</option>)}
-          <option value={CUSTOM}>Custom prompt…</option>
-        </select>
-        {content && <button disabled={busy} onClick={() => load(key, true)} className="text-xs text-muted underline hover:text-text">Regenerate</button>}
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+        <label className="flex items-center gap-2 text-muted">Template
+          <select id="tpl" value={key} disabled={busy} onChange={(e) => (e.target.value === CUSTOM ? setForm({ name: "", prompt: "" }) : load(e.target.value))} className="field field-sm text-text">
+            {templates.map((t) => <option key={t.key} value={t.key}>{t.name}{cache[t.key] ? "" : " ·"}</option>)}
+            <option value={CUSTOM}>Custom prompt…</option>
+          </select></label>
+        {content && <button disabled={busy} onClick={() => load(key, true)} className="btn btn-ghost btn-sm"><RefreshCw />Regenerate</button>}
       </div>
       {form && (
-        <div className="space-y-2 rounded-lg border border-border bg-surface p-3 text-sm">
-          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Template name" className="w-full rounded border border-border bg-bg px-2 py-1.5" />
-          <textarea value={form.prompt} onChange={(e) => setForm({ ...form, prompt: e.target.value })} rows={4} placeholder="Tell Milo what to focus on and which sections you want…" className="w-full rounded border border-border bg-bg px-2 py-1.5" />
+        <div className="card space-y-3 p-4 text-sm">
+          <div className="font-medium">New summary template</div>
+          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Template name" className="field w-full" />
+          <textarea value={form.prompt} onChange={(e) => setForm({ ...form, prompt: e.target.value })} rows={4} placeholder="Tell Milo what to focus on and which sections you want…" className="field w-full" />
           <div className="flex gap-2">
-            <button onClick={saveTemplate} className="rounded bg-accent px-3 py-1.5 font-medium text-white">Save and generate</button>
-            <button onClick={() => setForm(null)} className="rounded border border-border px-3 py-1.5">Cancel</button>
+            <button onClick={saveTemplate} className="btn btn-primary btn-sm">Save and generate</button>
+            <button onClick={() => setForm(null)} className="btn btn-secondary btn-sm">Cancel</button>
           </div>
         </div>
       )}
-      {error && <p className="text-sm text-red-500">{error} <button onClick={() => load(key, true)} className="underline">Try again</button></p>}
-      {busy && <p className="text-sm text-muted">Writing this version of the summary…</p>}
-      {!busy && content?.sections.map((s) => (
-        <section key={s.heading}>
-          <h3 className="mb-1 text-sm font-semibold">{s.heading}</h3>
-          <ul className="space-y-1.5 text-sm">
-            {s.bullets.map((b, i) => (
-              <li key={i} className="flex gap-2"><span className="text-muted">•</span><span>{b.text}{b.ms !== undefined && <TimeChip ms={b.ms} onSeek={onSeek} />}</span></li>
-            ))}
-          </ul>
-        </section>
-      ))}
+      {error && <p className="text-sm text-danger">{error} <button onClick={() => load(key, true)} className="underline">Try again</button></p>}
+      {busy && <Working title="Writing this version of the summary…" />}
+      {!busy && content && (
+        <div className="card divide-y divide-border">
+          {content.sections.map((s) => (
+            <section key={s.heading} className="p-4 sm:p-5">
+              <h3 className="mb-2.5 text-sm font-semibold tracking-tight">{s.heading}</h3>
+              <ul className="space-y-2 text-sm leading-relaxed">
+                {s.bullets.map((b, i) => (
+                  <li key={i} className="flex gap-2.5"><span className="mt-[0.55rem] h-1 w-1 shrink-0 rounded-full bg-accent" /><span>{b.text}{b.ms !== undefined && <TimeChip ms={b.ms} onSeek={onSeek} />}</span></li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -102,7 +105,7 @@ export function ActionItemsPanel({ meetingId, items: initial, stage, onSeek }: {
   const [copied, setCopied] = useState(false);
 
   if (stage?.status === "failed" && !items.length) return <Failed title="Action items failed" error={stage.error} meetingId={meetingId} stage="intelligence" />;
-  if (!items.length) return <div className="rounded-lg border border-border bg-surface p-6 text-sm text-muted">{stage?.status === "done" ? "No action items were found in this meeting." : "Looking for action items…"}</div>;
+  if (!items.length) return stage?.status === "done" ? <div className="card p-6 text-sm text-muted">No action items were found in this meeting.</div> : <Working title="Looking for action items…" />;
 
   function toggle(id: string, done: boolean) {
     setItems((xs) => xs.map((x) => (x.id === id ? { ...x, done } : x)));
@@ -116,25 +119,29 @@ export function ActionItemsPanel({ meetingId, items: initial, stage, onSeek }: {
     const md = ordered.map(([who, xs]) => `### ${who}\n${xs.map((x) => `- [${x.done ? "x" : " "}] ${x.text}${x.sourceMs !== null ? ` (${formatMs(x.sourceMs)})` : ""}`).join("\n")}`).join("\n\n");
     try { await navigator.clipboard.writeText(md); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch {}
   }
+  const done = items.filter((i) => i.done).length;
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-muted">{items.filter((i) => i.done).length} of {items.length} done</span>
-        <button onClick={copy} className="rounded border border-border px-2.5 py-1 text-xs hover:border-accent">{copied ? "Copied" : "Copy as Markdown"}</button>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+        <span className="shrink-0 text-muted"><span className="font-medium text-text">{done}</span> of {items.length} done</span>
+        <div className="h-1.5 min-w-16 flex-1 overflow-hidden rounded-full bg-raised"><div className="h-full rounded-full bg-success transition-[width] duration-300" style={{ width: `${(done / items.length) * 100}%` }} /></div>
+        <button onClick={copy} className="btn btn-secondary btn-sm">{copied ? <><Check />Copied</> : <><Copy />Copy as Markdown</>}</button>
       </div>
-      {ordered.map(([who, xs]) => (
-        <section key={who}>
-          <h3 className="mb-1 text-sm font-semibold">{who}</h3>
-          <ul className="space-y-1.5 text-sm">
-            {xs.map((x) => (
-              <li key={x.id} className="flex items-start gap-2">
-                <input type="checkbox" checked={x.done} onChange={(e) => toggle(x.id, e.target.checked)} className="mt-1" />
-                <span className={x.done ? "text-muted line-through" : ""}>{x.text}{x.sourceMs !== null && <TimeChip ms={x.sourceMs} onSeek={onSeek} />}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+      <div className="card divide-y divide-border">
+        {ordered.map(([who, xs]) => (
+          <section key={who} className="p-5">
+            <h3 className="mb-2.5 flex items-center gap-2 text-sm font-semibold tracking-tight">{who}<span className="rounded-full bg-raised px-1.5 text-xs font-normal text-muted">{xs.length}</span></h3>
+            <ul className="space-y-2.5 text-sm leading-relaxed">
+              {xs.map((x) => (
+                <li key={x.id} className="flex items-start gap-3">
+                  <input type="checkbox" checked={x.done} onChange={(e) => toggle(x.id, e.target.checked)} aria-label={x.text} className="check mt-0.5" />
+                  <span className={x.done ? "text-subtle line-through" : ""}>{x.text}{x.sourceMs !== null && <TimeChip ms={x.sourceMs} onSeek={onSeek} />}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
     </div>
   );
 }

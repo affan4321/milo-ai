@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%" fill="none">
+  <defs>
+    <linearGradient id="favBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E1B4B" />
+      <stop offset="100%" stop-color="#0F172A" />
+    </linearGradient>
+
+    <linearGradient id="favWave" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8" />
+      <stop offset="50%" stop-color="#6366F1" />
+      <stop offset="100%" stop-color="#818CF8" />
+    </linearGradient>
+    
+    <linearGradient id="favSparkle" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22D3EE" />
+      <stop offset="100%" stop-color="#A855F7" />
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded App Background Container -->
+  <rect width="512" height="512" rx="128" fill="url(#favBg)" />
+
+  <!-- Waveform Element -->
+  <g transform="translate(96, 128)">
+    <rect x="0" y="96" width="40" height="128" rx="20" fill="url(#favWave)" />
+    <rect x="72" y="32" width="40" height="224" rx="20" fill="url(#favWave)" />
+    <rect x="144" y="80" width="40" height="160" rx="20" fill="url(#favWave)" />
+    <rect x="216" y="0" width="40" height="256" rx="20" fill="url(#favWave)" />
+    <rect x="288" y="96" width="40" height="128" rx="20" fill="url(#favWave)" />
+
+    <!-- AI Sparkle Icon -->
+    <path d="M 310 10 Q 310 70 370 70 Q 310 70 310 130 Q 310 70 250 70 Q 310 70 310 10 Z" fill="url(#favSparkle)" />
+  </g>
+</svg>

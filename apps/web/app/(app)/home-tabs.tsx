@@ -1,13 +1,14 @@
 import Link from "next/link";
 
-const TABS = [["calls", "My calls", "/home"], ["team", "Team calls", "/home?tab=team"], ["playlists", "Playlists", "/playlists"], ["alerts", "Alerts", "/alerts"]] as const;
+const TABS = [["calls", "My calls", "/home"], ["team", "Team calls", "/home?tab=team"]] as const;
 
-/** The tab strip shared by Home, Playlists and Alerts, as in the original. (Deals/CRM sync is deliberately not built.) */
-export function HomeTabs({ active }: { active: "calls" | "team" | "playlists" | "alerts" }) {
+/** Switches Home between your own calls and the ones teammates shared. (Playlists and Alerts live in the sidebar; Deals/CRM sync is deliberately not built.) */
+export function HomeTabs({ active }: { active: "calls" | "team" }) {
   return (
-    <nav className="mb-6 flex gap-1 border-b border-border text-sm" aria-label="Sections">
+    <nav className="mb-6 inline-flex rounded-[10px] border border-border bg-raised p-1 text-sm" aria-label="Which calls to show">
       {TABS.map(([key, label, href]) => (
-        <Link key={key} href={href} className={`-mb-px border-b-2 px-3 py-2 ${active === key ? "border-accent font-medium text-text" : "border-transparent text-muted hover:text-text"}`}>{label}</Link>
+        <Link key={key} href={href} aria-current={active === key ? "page" : undefined}
+          className={`rounded-md px-3.5 py-1.5 transition-colors ${active === key ? "bg-surface font-medium text-text shadow-card" : "text-muted hover:text-text"}`}>{label}</Link>
       ))}
     </nav>
   );

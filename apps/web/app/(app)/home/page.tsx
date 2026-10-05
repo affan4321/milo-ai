@@ -15,26 +15,38 @@ import { UploadButton } from "./upload-button";
 import { getCurrentUser } from "@/lib/session";
 import { ConnectIcsForm } from "./connect-form";
 import { resyncAction } from "./actions";
+import { AlertTriangle, ArrowRight, Bot, CalendarClock, CalendarDays, Check, ChevronDown, Mail, RefreshCw, Upload, Users, Video, X } from "lucide-react";
+import { Badge, EmptyState, IconTile, Notice, PageHeader, Section } from "@/components/ui";
+import { groupByDay, timeLabel, whenLabel } from "@/lib/format";
+
 
 export const dynamic = "force-dynamic";
 const label = { meet: "Google Meet", zoom: "Zoom", teams: "Teams", unknown: "No meeting link" } as const;
+const SHOWN_UPCOMING = 6; // the rest sit behind "Show more" so recent calls stay within reach
+
+function greeting(now = new Date()) { const h = now.getHours(); return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening"; }
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const user = await getCurrentUser();
   const db = getDb();
+  const first = user.name?.split(" ")[0];
+  const actions = <><UploadButton /><SendMilo /></>;
   if ((await searchParams).tab === "team") {
     const team = await listTeamMeetings(db, user.id);
     return (
-      <div className="max-w-3xl">
+      <div>
+        <PageHeader title="Team calls" description="Meetings your teammates chose to share with the workspace. They also show up in Search and Ask Milo." actions={actions} />
         <HomeTabs active="team" />
         {team.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border p-6 text-sm text-muted">No team calls yet. When a teammate shares a meeting with the team, it appears here, and in search and Ask Milo (Team calls).</p>
+          <EmptyState icon={Users} title="No team calls yet">When a teammate shares a meeting with the team, it appears here, and in search and Ask Milo (Team calls).</EmptyState>
         ) : (
-          <ul className="divide-y divide-border rounded-lg border border-border bg-surface">
+          <ul className="card divide-y divide-border overflow-hidden">
             {team.map((m) => (
-              <li key={m.id}><Link href={`/meetings/${m.id}`} className="flex items-center justify-between p-4 hover:bg-bg">
-                <div><div className="font-medium">{m.title}</div><div className="text-sm text-muted">{m.owner} · {m.createdAt.toLocaleString()}</div></div>
-                <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted">Team</span>
+              <li key={m.id}><Link href={`/meetings/${m.id}`} className="group flex items-center gap-3 p-3 transition-colors hover:bg-raised sm:gap-4 sm:p-4">
+                <IconTile icon={Users} />
+                <div className="min-w-0 flex-1"><div className="truncate font-medium">{m.title}</div><div className="mt-0.5 truncate text-sm text-muted">{m.owner} · {whenLabel(m.createdAt)}</div></div>
+                <Badge>Team</Badge>
+                <ArrowRight className="hidden h-4 w-4 shrink-0 text-subtle transition-transform sm:block group-hover:translate-x-0.5 group-hover:text-text" />
               </Link></li>
             ))}
           </ul>
@@ -59,86 +71,134 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ t
   const failing = conns.find((c) => c.lastError);
   const lastSync = conns.map((c) => c.lastSyncedAt).filter(Boolean).sort().pop();
 
+  const eventRow = (e: (typeof events)[number]) => (
+    <li key={e.id} className="flex items-center gap-4 px-4 py-3">
+      <span className="w-[4.5rem] shrink-0 text-sm font-medium tabular-nums">{timeLabel(e.startsAt)}</span>
+      <div className="min-w-0 flex-1">
+        <div className="truncate font-medium">{e.title}</div>
+        <div className="mt-0.5 text-xs text-muted">{label[e.platform as keyof typeof label] ?? label.unknown}</div>
+      </div>
+      {e.meetingUrl && e.platform === "meet" && <RecordToggle eventId={e.id} record={e.record} />}
+      {e.meetingUrl && e.platform !== "meet" && <Badge title="Milo can only join Google Meet calls so far">Meet only for now</Badge>}
+    </li>
+  );
+  const dayGroups = (list: typeof events) => groupByDay(list, (e) => e.startsAt).map((g) => (
+    <li key={g.day}>
+      <div className="eyebrow border-b border-border bg-raised/60 px-4 py-2">{g.day}</div>
+      <ul className="divide-y divide-border">{g.items.map(eventRow)}</ul>
+    </li>
+  ));
+
   return (
-    <div className="max-w-3xl space-y-8">
+    <div>
+      <PageHeader title={first ? `${greeting()}, ${first}` : greeting()}
+        description={events.length ? `${events.length === 50 ? "50+" : events.length} upcoming ${events.length === 1 ? "meeting" : "meetings"} on your calendar. Milo's notes land here when each one ends.` : "Your meetings, recaps and recordings in one place."}
+        actions={actions} />
       <HomeTabs active="calls" />
       {live.length > 0 && <AutoRefresh ms={3000} />}
-      {live.length > 0 && (
-        <section className="space-y-2">
-          {live.map(({ s, title }) => (
-            <Link key={s.id} href={`/meetings/${s.meetingId}`} className="flex items-center justify-between rounded-lg border border-accent/50 bg-accent/10 p-4 hover:bg-accent/15">
-              <div><div className="font-medium">{title}</div><div className="text-sm text-muted">{botStatusText(s, cap)}</div></div>
-              <span className={`h-2.5 w-2.5 rounded-full ${s.state === "recording" ? "animate-pulse bg-red-500" : "bg-amber-500"}`} />
-            </Link>
-          ))}
-        </section>
-      )}
-      {failing && (
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-          Calendar sync problem: {failing.lastError} Showing the last synced events.
-          {failing.kind === "google" && <a href="/sign-in" className="ml-2 underline">Reconnect Google</a>}
-        </div>
-      )}
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h1 className="text-xl font-semibold">Upcoming meetings</h1>
-          {conns.length > 0 && (
-            <form action={resyncAction} className="flex items-center gap-3 text-xs text-muted">
-              {lastSync && <span>Synced {lastSync.toLocaleTimeString()}</span>}
-              <button className="rounded border border-border px-2 py-1 hover:text-text">Sync now</button>
-            </form>
+
+      <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="min-w-0 space-y-10">
+          {live.length > 0 && (
+            <Section title="Happening now">
+              <div className="space-y-2">
+                {live.map(({ s, title }) => (
+                  <Link key={s.id} href={`/meetings/${s.meetingId}`} className="group flex items-center gap-4 rounded-[14px] border border-accent/40 bg-accent/[0.07] p-4 transition-colors hover:bg-accent/[0.12]">
+                    <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-accent text-white">
+                      <Bot className="h-[18px] w-[18px]" />
+                      <span className={`absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-surface ${s.state === "recording" ? "animate-pulse bg-danger" : "bg-warn"}`} />
+                    </span>
+                    <div className="min-w-0 flex-1"><div className="truncate font-medium">{title}</div><div className="mt-0.5 text-sm text-muted">{botStatusText(s, cap)}</div></div>
+                    <span className="hidden text-sm font-medium text-accent-ink sm:inline">Open</span>
+                    <ArrowRight className="h-4 w-4 shrink-0 text-accent-ink transition-transform group-hover:translate-x-0.5" />
+                  </Link>
+                ))}
+              </div>
+            </Section>
           )}
+          {failing && (
+            <Notice icon={AlertTriangle} title="Calendar sync problem">
+              {failing.lastError} Showing the last synced events.
+              {failing.kind === "google" && <a href="/sign-in" className="link ml-2">Reconnect Google</a>}
+            </Notice>
+          )}
+
+          <Section title="Upcoming meetings" aside={conns.length > 0 && (
+            <form action={resyncAction} className="flex items-center gap-3">
+              {lastSync && <span>Synced {timeLabel(lastSync)}</span>}
+              <button className="btn btn-secondary btn-sm"><RefreshCw />Sync now</button>
+            </form>
+          )}>
+            {events.length === 0 ? (
+              <EmptyState icon={CalendarDays} title={conns.length ? "Nothing coming up" : "No calendar connected"}>
+                {conns.length ? "No upcoming meetings in the next two weeks." : "Connect a calendar to see your upcoming meetings and have Milo join them."}
+              </EmptyState>
+            ) : (
+              <div className="card overflow-hidden">
+                <ul>{dayGroups(events.slice(0, SHOWN_UPCOMING))}</ul>
+                {events.length > SHOWN_UPCOMING && (
+                  <details className="group border-t border-border">
+                    <summary className="flex list-none items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-medium text-accent-ink hover:bg-raised [&::-webkit-details-marker]:hidden">
+                      <span className="group-open:hidden">Show {events.length - SHOWN_UPCOMING} more</span><span className="hidden group-open:inline">Show fewer</span>
+                      <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+                    </summary>
+                    <ul className="border-t border-border">{dayGroups(events.slice(SHOWN_UPCOMING))}</ul>
+                  </details>
+                )}
+              </div>
+            )}
+          </Section>
+
+          <Section title="Recent calls" aside={recent.length > 0 && <span>{recent.length === 20 ? "Latest 20" : `${recent.length} ${recent.length === 1 ? "call" : "calls"}`}</span>}>
+            {recent.length === 0 ? (
+              <EmptyState icon={Video} title="No calls yet">Send Milo to a meeting or upload a recording, and the transcript, summary and action items will show up here.</EmptyState>
+            ) : (
+              <ul className="card divide-y divide-border overflow-hidden">
+                {recent.map((m) => (
+                  <li key={m.id}>
+                    <Link href={`/meetings/${m.id}`} className="group flex items-center gap-3 p-3 transition-colors hover:bg-raised sm:gap-4 sm:p-4">
+                      <IconTile icon={m.captureSource === "upload" ? Upload : Video} tone="accent" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-medium">{m.title}</div>
+                        <div className="mt-0.5 truncate text-sm text-muted">{whenLabel(m.createdAt)} · {m.captureSource === "upload" ? "Uploaded" : m.captureSource === "bot" ? "Recorded by Milo" : m.captureSource}</div>
+                      </div>
+                      {m.status === "ready" ? <Badge tone="success" dot>Ready</Badge> : m.status === "failed" ? <Badge tone="danger" dot>Failed</Badge> : <Badge tone="warn" dot pulse>Processing</Badge>}
+                      <ArrowRight className="hidden h-4 w-4 shrink-0 text-subtle transition-transform sm:block group-hover:translate-x-0.5 group-hover:text-text" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Section>
         </div>
-        {events.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border p-6 text-sm text-muted">
-            {conns.length ? "No upcoming meetings in the next two weeks." : "Connect a calendar below to see your upcoming meetings."}
-          </p>
-        ) : (
-          <ul className="divide-y divide-border rounded-lg border border-border bg-surface">
-            {events.map((e) => (
-              <li key={e.id} className="flex items-center justify-between p-4">
-                <div>
-                  <div className="font-medium">{e.title}</div>
-                  <div className="text-sm text-muted">{e.startsAt.toLocaleString()} · {label[e.platform as keyof typeof label] ?? label.unknown}</div>
-                </div>
-                {e.meetingUrl && e.platform === "meet" && <RecordToggle eventId={e.id} record={e.record} />}
-                {e.meetingUrl && e.platform !== "meet" && <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted" title="Milo can only join Google Meet calls so far">Meet only for now</span>}
+
+        <aside className="grid grid-cols-1 content-start items-start gap-4 md:grid-cols-2 xl:grid-cols-1 xl:pt-9">
+          <div className="card p-5">
+            <div className="eyebrow mb-3">Meeting preferences</div>
+            <ul className="space-y-3 text-sm">
+              <li className="flex gap-3">
+                <IconTile icon={CalendarClock} size="sm" tone={prefs.autoRecordRule === "none" ? "neutral" : "accent"} />
+                <div><div className="font-medium">{prefs.autoRecordRule === "none" ? "Not joining automatically" : "Joins automatically"}</div>
+                  <div className="text-muted">{prefs.autoRecordRule === "none" ? "Milo only joins when you send it." : recordLabel}</div></div>
               </li>
-            ))}
-          </ul>
-        )}
-      </section>
-      <section className="rounded-lg border border-border bg-surface p-4 text-sm">
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Meeting preferences</div>
-        <ul className="space-y-1">
-          <li>{prefs.autoRecordRule === "none" ? "✗ Milo won't join meetings automatically" : `✓ Milo joins automatically: ${recordLabel.toLowerCase()}`}</li>
-          <li>{prefs.autoShareRule === "none" ? "✗ Recaps aren't emailed to anyone" : `✓ Recaps are emailed to ${shareLabel.toLowerCase()}`}</li>
-        </ul>
-        <Link href="/customize" className="mt-3 inline-block text-accent hover:underline">Edit settings</Link>
-      </section>
-      <ConnectIcsForm />
-      <section className="flex flex-wrap items-start gap-3">
-        <SendMilo />
-        <UploadButton />
-      </section>
-      {recent.length > 0 && (
-        <section>
-          <h2 className="mb-3 text-xl font-semibold">My calls</h2>
-          <ul className="divide-y divide-border rounded-lg border border-border bg-surface">
-            {recent.map((m) => (
-              <li key={m.id}>
-                <Link href={`/meetings/${m.id}`} className="flex items-center justify-between p-4 hover:bg-bg">
-                  <div>
-                    <div className="font-medium">{m.title}</div>
-                    <div className="text-sm text-muted">{m.createdAt.toLocaleString()} · {m.captureSource}</div>
-                  </div>
-                  <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted">{m.status === "ready" ? "Ready" : m.status === "failed" ? "Failed" : "Processing"}</span>
-                </Link>
+              <li className="flex gap-3">
+                <IconTile icon={Mail} size="sm" tone={prefs.autoShareRule === "none" ? "neutral" : "accent"} />
+                <div><div className="font-medium">{prefs.autoShareRule === "none" ? "Recaps aren't emailed" : "Recaps are emailed"}</div>
+                  <div className="text-muted">{prefs.autoShareRule === "none" ? "No one receives them." : `To ${shareLabel.toLowerCase()}`}</div></div>
               </li>
-            ))}
-          </ul>
-        </section>
-      )}
+            </ul>
+            <Link href="/customize" className="link mt-4 inline-flex items-center gap-1 text-sm">Edit recording rules<ArrowRight className="h-3.5 w-3.5" /></Link>
+          </div>
+          {conns.length > 0 && (
+            <div className="card flex items-center gap-3 p-4 text-sm">
+              <IconTile icon={failing ? X : Check} size="sm" tone={failing ? "warn" : "success"} />
+              <div className="min-w-0 flex-1"><div className="font-medium">{conns.length} {conns.length === 1 ? "calendar" : "calendars"} connected</div>
+                <Link href="/settings" className="text-xs text-muted hover:text-text">Manage in Settings</Link></div>
+            </div>
+          )}
+          <ConnectIcsForm />
+        </aside>
+      </div>
     </div>
   );
 }

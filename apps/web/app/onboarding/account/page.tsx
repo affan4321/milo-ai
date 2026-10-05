@@ -1,3 +1,5 @@
+import { Check, Minus, User, Users } from "lucide-react";
+import { Badge, IconTile } from "@/components/ui";
 import { getCurrentUser } from "@/lib/session";
 import { Progress } from "../progress";
 import { chooseAccountAction } from "../actions";
@@ -8,26 +10,29 @@ export default async function AccountStep() {
   return (
     <div className="w-full max-w-3xl text-center">
       <Progress step="account" />
-      <h1 className="text-2xl font-semibold">Are your meetings on a company calendar?</h1>
-      <p className="mt-2 text-muted"><span className="text-text">{user.email}</span> looks like a personal email.</p>
-      <div className="mt-8 grid gap-4 md:grid-cols-2">
-        <form action={chooseAccountAction} className="flex flex-col rounded-xl border border-border bg-surface p-6 text-left">
+      <h1 className="text-2xl font-semibold sm:text-3xl tracking-tight text-balance">Are your meetings on a company calendar?</h1>
+      <p className="mt-3 text-muted"><span className="font-medium text-text">{user.email}</span> looks like a personal email.</p>
+      <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-2">
+        <form action={chooseAccountAction} className="card flex flex-col p-6 text-left">
           <input type="hidden" name="type" value="personal" />
-          <h2 className="text-lg font-medium">Just me</h2>
+          <IconTile icon={User} />
+          <h2 className="mt-4 text-lg font-semibold tracking-tight">Just me</h2>
           <p className="text-sm text-muted">Good for one-off calls.</p>
-          <ul className="my-4 flex-1 space-y-1 text-sm text-muted">
-            <li>· See only your own meetings</li><li>· No shared workspace</li><li>· Can&apos;t be converted to a team later</li>
+          <ul className="my-5 flex-1 space-y-2 text-sm text-muted">
+            {["See only your own meetings", "No shared workspace", "Can't be converted to a team later"].map((x) => <li key={x} className="flex gap-2.5"><Minus className="mt-0.5 h-4 w-4 shrink-0 text-subtle" />{x}</li>)}
           </ul>
-          <button className="rounded border border-border px-4 py-2 text-sm">Continue with personal email</button>
+          <button className="btn btn-secondary btn-lg">Continue with personal email</button>
         </form>
-        <form action={chooseAccountAction} className="flex flex-col rounded-xl border border-accent bg-surface p-6 text-left">
+        <form action={chooseAccountAction} className="card relative flex flex-col border-accent p-6 text-left shadow-pop ring-4 ring-accent/10">
           <input type="hidden" name="type" value="team" />
-          <h2 className="text-lg font-medium">Me or my team <span className="ml-2 rounded-full bg-accent/15 px-2 py-0.5 text-xs text-accent">Recommended</span></h2>
+          <span className="absolute right-5 top-5"><Badge tone="accent">Recommended</Badge></span>
+          <IconTile icon={Users} tone="accent" />
+          <h2 className="mt-4 text-lg font-semibold tracking-tight">Me or my team</h2>
           <p className="text-sm text-muted">Everything Milo can do.</p>
-          <ul className="my-4 flex-1 space-y-1 text-sm text-muted">
-            <li>✓ Personal and team preferences</li><li>✓ Private and shared workspaces</li><li>✓ Add teammates any time</li>
+          <ul className="my-5 flex-1 space-y-2 text-sm">
+            {["Personal and team preferences", "Private and shared workspaces", "Add teammates any time"].map((x) => <li key={x} className="flex gap-2.5"><Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />{x}</li>)}
           </ul>
-          <button className="rounded bg-accent px-4 py-2 text-sm font-medium text-white">Continue</button>
+          <button className="btn btn-primary btn-lg">Continue</button>
         </form>
       </div>
     </div>

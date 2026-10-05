@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { formatMs } from "@milo/core";
+import { ArrowUp, MessageSquarePlus, Pencil, Sparkles } from "lucide-react";
 import { askAction, editAction } from "./actions";
 
 type Scope = "my" | "team" | "all";
@@ -16,7 +17,7 @@ const NOTE = "Answered from keyword matches only; meaning-based matching is unav
 function Answer({ text, citations }: { text: string; citations: Citation[] }) {
   return <>{text.split(/(\[\d+\])/).map((part, i) => {
     const m = /^\[(\d+)\]$/.exec(part); const c = m && citations.find((x) => x.n === Number(m[1]));
-    return c ? <Link key={i} href={`/meetings/${c.meetingId}?t=${c.startMs}`} title={`${c.title} · ${formatMs(c.startMs)}`} className="mx-0.5 rounded bg-accent/15 px-1 text-xs font-medium text-accent hover:bg-accent/25">{c.n}</Link> : <span key={i}>{part}</span>;
+    return c ? <Link key={i} href={`/meetings/${c.meetingId}?t=${c.startMs}`} title={`${c.title} · ${formatMs(c.startMs)}`} className="mx-0.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent/15 px-1 align-text-top text-[11px] font-semibold text-accent-ink transition-colors hover:bg-accent hover:text-white">{c.n}</Link> : <span key={i}>{part}</span>;
   })}</>;
 }
 
@@ -54,59 +55,88 @@ export function AskChat({ initial }: { initial: { threadId: string; scope: Scope
   }
   function reset() { setMsgs([]); setThreadId(null); setError(null); setEditing(null); setDegraded(false); setQ(""); window.history.replaceState(null, "", "/ask"); }
 
+  const empty = msgs.length === 0 && !pendingQ;
   return (
-    <div className="flex h-[calc(100vh-8rem)] flex-col">
-      <div className="mb-3 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Ask Milo</h1>
-        <div className="flex items-center gap-3 text-sm">
-          <select value={scope} onChange={(e) => setScope(e.target.value as Scope)} className="rounded border border-border bg-surface px-2 py-1" aria-label="Which meetings to search">{SCOPES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</select>
-          {msgs.length > 0 && <button onClick={reset} className="text-xs text-muted underline hover:text-text">New chat</button>}
+    <div className="flex h-[calc(100vh-11rem)] min-h-[28rem] flex-col lg:h-full">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight"><Sparkles className="h-5 w-5 text-accent-ink" />Ask Milo</h1>
+        <div className="flex items-center gap-2">
+          <select value={scope} onChange={(e) => setScope(e.target.value as Scope)} className="field field-sm" aria-label="Which meetings to search">{SCOPES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</select>
+          {msgs.length > 0 && <button onClick={reset} className="btn btn-secondary btn-sm"><MessageSquarePlus />New chat</button>}
         </div>
       </div>
-      <div className="flex-1 space-y-4 overflow-y-auto rounded-lg border border-border bg-surface p-4">
-        {msgs.length === 0 && !pendingQ && (
-          <div className="space-y-3 text-sm text-muted">
-            <p>Ask a question about your meetings. Answers cite the exact moments they come from, and this chat is saved so you can come back to it.</p>
-            <div className="flex flex-wrap gap-2">{EXAMPLES.map((x) => <button key={x} onClick={() => send(x)} className="rounded-full border border-border px-3 py-1 text-xs hover:border-accent hover:text-text">{x}</button>)}</div>
-          </div>
-        )}
-        {msgs.map((m) => m.role === "user" ? (
-          <div key={m.id} className="group ml-auto max-w-[85%]">
-            {editing?.id === m.id ? (
-              <div className="space-y-2 rounded-lg border border-accent p-2">
-                <textarea autoFocus value={editing.text} onChange={(e) => setEditing({ id: m.id, text: e.target.value })} rows={2} maxLength={1000} className="w-full resize-y rounded border border-border bg-bg px-2 py-1.5 text-sm" />
-                <p className="text-xs text-muted">Saving replaces this question and everything after it with a new answer.</p>
-                <div className="flex gap-2"><button disabled={pending || !editing.text.trim()} onClick={saveEdit} className="rounded bg-accent px-3 py-1 text-xs font-medium text-white disabled:opacity-60">{pending ? "Asking…" : "Save and ask again"}</button><button disabled={pending} onClick={() => { setEditing(null); setError(null); }} className="rounded border border-border px-3 py-1 text-xs">Cancel</button></div>
+      <div className="card flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+          {empty ? (
+            <div className="mx-auto flex h-full max-w-lg flex-col items-center justify-center text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#6366F1] to-[#06B6D4] text-white shadow-pop"><Sparkles className="h-6 w-6" /></span>
+              <h2 className="mt-5 text-xl font-semibold tracking-tight">What do you want to know?</h2>
+              <p className="mt-1.5 text-sm leading-relaxed text-muted">Ask a question about your meetings. Answers cite the exact moments they come from, and this chat is saved so you can come back to it.</p>
+              <div className="mt-6 grid w-full grid-cols-1 gap-2">
+                {EXAMPLES.map((x) => <button key={x} onClick={() => send(x)} className="rounded-xl border border-border bg-bg px-4 py-3 text-left text-sm transition-colors hover:border-accent hover:bg-accent/[0.06]">{x}</button>)}
               </div>
-            ) : (
-              <div className="flex items-start justify-end gap-2">
-                <button onClick={() => { setEditing({ id: m.id, text: m.content }); setError(null); }} disabled={pending} title="Edit this question" aria-label="Edit this question" className="invisible mt-1 text-xs text-muted hover:text-text group-hover:visible">✎ Edit</button>
-                <div className="rounded-lg bg-accent px-3 py-2 text-sm text-white">{m.content}</div>
-              </div>
-            )}
+            </div>
+          ) : (
+            <div className="mx-auto max-w-3xl space-y-6">
+              {msgs.map((m) => m.role === "user" ? (
+                <div key={m.id} className="group ml-auto max-w-[92%] sm:max-w-[85%]">
+                  {editing?.id === m.id ? (
+                    <div className="space-y-2 rounded-xl border border-accent bg-bg p-3">
+                      <textarea autoFocus value={editing.text} onChange={(e) => setEditing({ id: m.id, text: e.target.value })} rows={2} maxLength={1000} className="field w-full resize-y" />
+                      <p className="text-xs text-muted">Saving replaces this question and everything after it with a new answer.</p>
+                      <div className="flex gap-2"><button disabled={pending || !editing.text.trim()} onClick={saveEdit} className="btn btn-primary btn-sm">{pending ? "Asking…" : "Save and ask again"}</button><button disabled={pending} onClick={() => { setEditing(null); setError(null); }} className="btn btn-secondary btn-sm">Cancel</button></div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-end gap-1">
+                      <button onClick={() => { setEditing({ id: m.id, text: m.content }); setError(null); }} disabled={pending} title="Edit this question" aria-label="Edit this question" className="btn btn-ghost btn-sm btn-icon opacity-0 focus-visible:opacity-100 group-hover:opacity-100"><Pencil /></button>
+                      <div className="rounded-2xl rounded-br-md bg-accent px-4 py-2.5 text-sm leading-relaxed text-white">{m.content}</div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div key={m.id} className="flex gap-3">
+                  <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent-ink"><Sparkles className="h-3.5 w-3.5" /></span>
+                  <div className="min-w-0 flex-1 space-y-3 text-sm">
+                    <p className="whitespace-pre-wrap leading-relaxed"><Answer text={m.content} citations={m.citations} /></p>
+                    {m.citations.length > 0 && (
+                      <div>
+                        <div className="eyebrow mb-1.5">Sources</div>
+                        <ol className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                          {m.citations.map((c) => (
+                            <li key={c.n}><Link href={`/meetings/${c.meetingId}?t=${c.startMs}`} className="flex h-full gap-2.5 rounded-lg border border-border bg-bg p-2.5 text-xs transition-colors hover:border-accent">
+                              <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent/15 text-[11px] font-semibold text-accent-ink">{c.n}</span>
+                              <span className="min-w-0"><span className="block truncate font-medium text-text">{c.title}</span>
+                                <span className="text-subtle"><span className="font-mono">{formatMs(c.startMs)}</span> · {c.speaker}</span>
+                                <span className="mt-1 line-clamp-2 text-muted">{c.snippet.replace(/\n/g, " ").slice(0, 110)}</span></span>
+                            </Link></li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {pendingQ && <div className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-accent px-4 py-2.5 text-sm leading-relaxed text-white">{pendingQ}</div>}
+              {pending && (
+                <div className="flex items-center gap-3 text-sm text-muted">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/10 text-accent-ink"><Sparkles className="h-3.5 w-3.5" /></span>
+                  Looking through your meetings
+                  <span className="flex gap-1" aria-hidden>{[0, 1, 2].map((i) => <span key={i} className="h-1.5 w-1.5 rounded-full bg-accent-ink [animation:typing_1.2s_infinite]" style={{ animationDelay: `${i * 0.15}s` }} />)}</span>
+                </div>
+              )}
+              {degraded && !pending && <p className="text-xs text-warn">{NOTE}</p>}
+              <div ref={end} />
+            </div>
+          )}
+        </div>
+        <form onSubmit={(e) => { e.preventDefault(); send(q); }} className="border-t border-border bg-bg/50 p-3">
+          {error && <p className="mx-auto mb-2 max-w-3xl px-1 text-sm text-danger" role="alert">{error}</p>}
+          <div className="mx-auto flex max-w-3xl items-center gap-2 rounded-xl border border-border-strong bg-surface p-1.5 pl-4 transition-shadow focus-within:border-accent focus-within:ring-4 focus-within:ring-accent/15">
+            <input value={q} onChange={(e) => setQ(e.target.value)} maxLength={1000} placeholder={threadId ? "Ask a follow-up" : "Ask anything about your meetings"} aria-label="Your question" className="h-9 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-subtle" />
+            <button disabled={pending || !q.trim()} aria-label="Ask" title="Ask" className="btn btn-primary btn-icon"><ArrowUp /></button>
           </div>
-        ) : (
-          <div key={m.id} className="max-w-[92%] space-y-2 text-sm">
-            <p className="leading-relaxed"><Answer text={m.content} citations={m.citations} /></p>
-            {m.citations.length > 0 && (
-              <ol className="space-y-1 border-l-2 border-border pl-3 text-xs text-muted">
-                {m.citations.map((c) => (
-                  <li key={c.n}><Link href={`/meetings/${c.meetingId}?t=${c.startMs}`} className="hover:text-text"><span className="font-medium text-accent">[{c.n}]</span> {c.title} · <span className="font-mono">{formatMs(c.startMs)}</span> · {c.speaker}: <span className="italic">{c.snippet.replace(/\n/g, " ").slice(0, 110)}</span></Link></li>
-                ))}
-              </ol>
-            )}
-          </div>
-        ))}
-        {pendingQ && <div className="ml-auto max-w-[85%] rounded-lg bg-accent px-3 py-2 text-sm text-white">{pendingQ}</div>}
-        {pending && <p className="text-sm text-muted">Looking through your meetings…</p>}
-        {degraded && !pending && <p className="text-xs text-amber-500">{NOTE}</p>}
-        {error && <p className="text-sm text-red-500">{error}</p>}
-        <div ref={end} />
+        </form>
       </div>
-      <form onSubmit={(e) => { e.preventDefault(); send(q); }} className="mt-3 flex gap-2">
-        <input value={q} onChange={(e) => setQ(e.target.value)} maxLength={1000} placeholder={threadId ? "Ask a follow-up" : "Ask anything about your meetings"} className="min-w-0 flex-1 rounded border border-border bg-surface px-3 py-2 text-sm" />
-        <button disabled={pending || !q.trim()} className="rounded bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-60">Ask</button>
-      </form>
     </div>
   );
 }

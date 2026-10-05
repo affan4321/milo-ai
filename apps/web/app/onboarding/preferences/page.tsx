@@ -5,7 +5,7 @@ export default function PreferencesStep() {
   return (
     <div className="w-full max-w-4xl">
       <Progress step="preferences" />
-      <p className="mb-6 text-center text-xs uppercase tracking-wider text-muted">Set up your preferences</p>
+      <p className="mb-8 text-center text-muted">Set up your preferences. You can change them any time.</p>
       <PreferencesForm />
     </div>
   );

@@ -1,12 +1,14 @@
 "use client";
+import { RotateCw, TriangleAlert } from "lucide-react";
 
 export default function ErrorPage({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   return (
-    <div className="mx-auto max-w-md p-10 text-center">
-      <h1 className="text-lg font-semibold">Something went wrong</h1>
-      <p className="mt-2 text-sm text-muted">This page hit an error. Your meetings and recordings are safe. Try again, and if it keeps happening, reload.</p>
-      {error.digest && <p className="mt-2 text-xs text-muted">Reference: {error.digest}</p>}
-      <button onClick={reset} className="mt-4 rounded bg-accent px-3 py-1.5 text-sm text-white">Try again</button>
+    <div className="mx-auto flex min-h-[70vh] max-w-md flex-col items-center justify-center p-10 text-center">
+      <span className="flex h-14 w-14 items-center justify-center rounded-2xl border border-danger/25 bg-danger/10 text-danger"><TriangleAlert className="h-6 w-6" /></span>
+      <h1 className="mt-5 text-xl font-semibold tracking-tight">Something went wrong</h1>
+      <p className="mt-2 text-sm leading-relaxed text-muted">This page hit an error. Your meetings and recordings are safe. Try again, and if it keeps happening, reload.</p>
+      {error.digest && <p className="mt-2 font-mono text-xs text-subtle">Reference: {error.digest}</p>}
+      <button onClick={reset} className="btn btn-primary mt-6"><RotateCw />Try again</button>
     </div>
   );
 }
