@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Mic, Search, ShieldCheck, Sparkles } from "lucide-react";
 import { auth, signIn, microsoftEnabled } from "@/auth";
@@ -12,7 +13,7 @@ export default async function SignIn({ searchParams }: { searchParams: Promise<{
   return (
     <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
       <div className="flex flex-col px-6 py-8 sm:px-12">
-        <Logo />
+        <Link href="/" className="w-fit" aria-label="Milo.ai home"><Logo /></Link>
         <div className="mx-auto flex w-full max-w-sm flex-1 animate-rise flex-col justify-center py-12">
           <h1 className="text-2xl font-semibold sm:text-3xl tracking-tight text-balance">Sign in to take better meeting notes</h1>
           <p className="mt-3 leading-relaxed text-muted">Milo joins your calls, writes the notes and remembers what was said, so you can stay in the conversation.</p>

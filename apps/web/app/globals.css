@@ -51,6 +51,7 @@
 @keyframes aurora { 0%, 100% { transform: translate3d(0, 0, 0) scale(1); } 50% { transform: translate3d(4%, -6%, 0) scale(1.12); } }
 @keyframes typing { 0%, 60%, 100% { opacity: 0.25; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-2px); } }
 
+html { scroll-behavior: smooth; }
 body { background: var(--bg); color: var(--text); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
 ::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
