@@ -1,13 +1,15 @@
 {
   "name": "@milo/providers",
   "version": "0.0.0",
-  "private": true, "type": "module",
+  "private": true,
+  "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
     "typecheck": "tsc -p ."
   },
   "dependencies": {
+    "@huggingface/transformers": "^3.5.2",
     "@milo/core": "workspace:*",
     "node-ical": "^0.27.3"
   }

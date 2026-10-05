@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { auth, signIn } from "@/auth";
+import { auth, signIn, microsoftEnabled } from "@/auth";
 
 export const dynamic = "force-dynamic";
 export default async function SignIn({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
@@ -12,9 +12,14 @@ export default async function SignIn({ searchParams }: { searchParams: Promise<{
       <form action={async () => { "use server"; await signIn("google", { redirectTo: "/onboarding" }); }}>
         <button className="rounded-lg border border-border bg-surface px-6 py-3 text-sm font-medium hover:border-accent">Continue with Google</button>
       </form>
-      <p className="max-w-sm text-xs text-muted">Milo asks for read-only access to your Google Calendar to know which meetings to join.</p>
+      {microsoftEnabled && (
+        <form action={async () => { "use server"; await signIn("microsoft-entra-id", { redirectTo: "/onboarding" }); }}>
+          <button className="rounded-lg border border-border bg-surface px-6 py-3 text-sm font-medium hover:border-accent">Continue with Microsoft</button>
+        </form>
+      )}
+      <p className="max-w-sm text-xs text-muted">Milo asks for read-only access to your calendar to know which meetings to join.</p>
       {error && <p className="max-w-sm text-sm text-red-500">
-        {error === "AccessDenied" ? "That Google account isn't on the test-user list yet. Ask for access and try again." : "Sign-in failed. Please try again."}
+        {error === "AccessDenied" ? "That account couldn't be signed in. For Google, it must be on the test-user list; for Microsoft, the account's email has to be verified by Microsoft." : "Sign-in failed. Please try again."}
       </p>}
     </div>
   );

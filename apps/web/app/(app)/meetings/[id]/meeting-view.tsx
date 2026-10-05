@@ -5,6 +5,7 @@ import { renameSpeakerAction } from "./actions";
 import type { HighlightView } from "./live-panel";
 import { createClipAction, deleteHighlightAction } from "./actions";
 import { ClipsPanel, type ClipView } from "./clips-panel";
+import { AddToPlaylist } from "./add-to-playlist";
 import { ActionItemsPanel, SummaryPanel, type ActionItemView, type StageView, type SummaryContent, type TemplateOpt } from "./panels";
 
 export interface SpeakerView { id: string; name: string; talkTimeMs: number }
@@ -30,10 +31,10 @@ const Line = memo(function Line({ seg, index, speaker, hue, active, selected, on
 export interface ChapterView { id: string; title: string; startMs: number }
 type Tab = "summary" | "actions" | "transcript";
 
-export function MeetingView({ meetingId, mediaUrl, isVideo, speakers, segments, chapters, actionItems, templates, summaries, defaultTemplate, insights, highlights, clips, durationMs, initialSeekMs }: {
+export function MeetingView({ meetingId, mediaUrl, isVideo, speakers, segments, chapters, actionItems, templates, summaries, defaultTemplate, insights, highlights, clips, durationMs, initialSeekMs, playlists }: {
   meetingId: string; mediaUrl: string; isVideo: boolean; speakers: SpeakerView[]; segments: SegmentView[];
   chapters: ChapterView[]; actionItems: ActionItemView[]; templates: TemplateOpt[]; summaries: Record<string, SummaryContent>; defaultTemplate: string; insights: StageView | null;
-  highlights: HighlightView[]; clips: ClipView[]; durationMs: number; initialSeekMs?: number;
+  highlights: HighlightView[]; clips: ClipView[]; durationMs: number; initialSeekMs?: number; playlists: { id: string; name: string }[];
 }) {
   const [tab, setTab] = useState<Tab>(initialSeekMs !== undefined ? "transcript" : "summary"); // arriving from a search result or citation: show the words
   const media = useRef<HTMLVideoElement & HTMLAudioElement>(null);
@@ -130,6 +131,7 @@ export function MeetingView({ meetingId, mediaUrl, isVideo, speakers, segments, 
                     <span className="w-24 shrink-0 font-mono text-xs text-muted">{formatMs(h.startMs)}–{formatMs(h.endMs)}</span>
                     <span>{h.note ?? "Highlight"}<span className="ml-2 text-xs text-muted">{h.createdBy ?? ""}</span></span>
                   </button>
+                  <span className="px-2"><AddToPlaylist meetingId={meetingId} playlists={playlists} range={{ startMs: h.startMs, endMs: h.endMs }} label="+ Playlist" /></span>
                   <button disabled={clipping} onClick={() => makeClip(h.startMs, h.endMs, h.note ?? undefined)} className="px-2 text-xs text-accent hover:underline disabled:opacity-60">Clip</button>
                   <button onClick={() => deleteHighlightAction(meetingId, h.id)} className="invisible px-2 text-xs text-muted hover:text-text group-hover:visible">Remove</button>
                 </li>

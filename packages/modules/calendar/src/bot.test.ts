@@ -63,6 +63,19 @@ const zoom = await createBotSession(db, { ownerId: u!.id, meetingUrl: "https://z
 const okS = await createBotSession(db, { ownerId: u!.id, meetingUrl: "  https://meet.google.com/abc-defg-hij?authuser=1 ", title: "Ad hoc" });
 check("job" in okS && okS.job.url === "https://meet.google.com/abc-defg-hij?authuser=1" && okS.job.platform === "meet", "manual link accepted and trimmed");
 
+// per-platform switch: a platform the owner turned off is never auto-recorded
+await db.update(preferences).set({ autoRecordRule: "all", recordPlatforms: ["zoom", "teams"] }).where(eq(preferences.userId, u!.id));
+await db.insert(calendarEvents).values(mk("meet-switched-off", 1, 30, "https://meet.google.com/swi-tchd-off"));
+check((await planBotJoins(db, now)).length === 0, "platform switched off in settings -> no automatic join");
+await db.update(preferences).set({ recordPlatforms: ["meet", "zoom", "teams"] }).where(eq(preferences.userId, u!.id));
+// default visibility: new meetings can start out shared with the team
+await db.update(preferences).set({ defaultVisibility: "team" }).where(eq(preferences.userId, u!.id));
+const vis = await createBotSession(db, { ownerId: u!.id, meetingUrl: "https://meet.google.com/vis-ibil-ity" });
+check((await db.select().from(meetings).where(eq(meetings.id, (vis as any).job.meetingId)))[0]!.visibility === "team", "default visibility 'team' applies to new meetings");
+await db.update(preferences).set({ defaultVisibility: "private" }).where(eq(preferences.userId, u!.id));
+const vis2 = await createBotSession(db, { ownerId: u!.id, meetingUrl: "https://meet.google.com/vis-ibil-two" });
+check((await db.select().from(meetings).where(eq(meetings.id, (vis2 as any).job.meetingId)))[0]!.visibility === "private", "...and 'private' is the default otherwise");
+
 // state machine + heartbeat + reaper
 const sid = (okS as any).job.botSessionId as string, mid = (okS as any).job.meetingId as string;
 const st = async () => (await db.select().from(botSessions).where(eq(botSessions.id, sid)))[0]!;

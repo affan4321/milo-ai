@@ -44,6 +44,7 @@ export class FakeStt implements SttProvider {
 
 /** Deterministic fake: derives bullets, chapters and action items from the transcript itself, so it behaves sensibly at any length. */
 export class FakeLlm implements LlmProvider {
+  readonly embedModel = "fake-bow"; readonly embedMetered = false;
   private lines(transcript: string) {
     return transcript.split("\n").flatMap((l) => {
       const m = /^\[t=(\d+)\] ([^:]+): (.*)$/.exec(l);
@@ -89,6 +90,6 @@ export class FakeCalendar implements CalendarProvider {
 }
 
 export class FakeEmail implements EmailProvider {
-  sent: { to: string; subject: string }[] = [];
-  async send(a: { to: string; subject: string; html: string }) { this.sent.push({ to: a.to, subject: a.subject }); }
+  sent: { to: string; subject: string; html: string; text?: string }[] = [];
+  async send(a: { to: string; subject: string; html: string; text?: string }) { this.sent.push(a); }
 }

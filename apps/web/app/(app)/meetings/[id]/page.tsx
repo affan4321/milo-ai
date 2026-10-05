@@ -10,6 +10,8 @@ import { getCurrentUser } from "@/lib/session";
 import { MeetingView } from "./meeting-view";
 import { LivePanel } from "./live-panel";
 import { VisibilityToggle } from "./visibility-toggle";
+import { AddToPlaylist } from "./add-to-playlist";
+import { listPlaylists } from "@milo/playlists";
 import { listClips, listHighlights } from "@milo/sharing";
 import { AutoRefresh } from "./auto-refresh";
 import { retryStageAction } from "./actions";
@@ -58,6 +60,7 @@ export default async function MeetingPage({ params, searchParams }: { params: Pr
   const templateOpts = [...BUILT_IN_TEMPLATES.map((t) => ({ key: t.key, name: t.name })), ...custom.map((t) => ({ key: t.key, name: t.name }))];
 
   const hls = await listHighlights(db, id);
+  const myPlaylists = (await listPlaylists(db, user.id)).map((p) => ({ id: p.id, name: p.name }));
   const clipRows = transcriptReady ? await listClips(db, id) : [];
   const clipViews = clipRows.map((c) => ({
     id: c.id, startMs: c.startMs, endMs: c.endMs, title: c.title, status: c.status, error: c.error,
@@ -82,7 +85,7 @@ export default async function MeetingPage({ params, searchParams }: { params: Pr
       <div>
         <Link href="/home" className="text-sm text-muted hover:text-text">← Home</Link>
         <h1 className="mt-1 text-2xl font-semibold">{meeting.title}</h1>
-        <div className="mt-1"><VisibilityToggle meetingId={id} visibility={meeting.visibility} /></div>
+        <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1"><VisibilityToggle meetingId={id} visibility={meeting.visibility} />{transcriptReady && <AddToPlaylist meetingId={id} playlists={myPlaylists} />}</div>
         <p className="text-sm text-muted">
           {meeting.createdAt.toLocaleString()}{rec?.durationMs ? ` · ${formatMs(rec.durationMs)}` : ""}{spk.length ? ` · ${spk.length} speakers` : ""}
         </p>
@@ -121,7 +124,7 @@ export default async function MeetingPage({ params, searchParams }: { params: Pr
           chapters={chs.map((c) => ({ id: c.id, title: c.title, startMs: c.startMs }))}
           actionItems={items.map((a) => ({ id: a.id, text: a.text, assignee: a.assignee, done: a.done, sourceMs: a.sourceMs })).sort((a, b) => (a.sourceMs ?? 0) - (b.sourceMs ?? 0))}
           templates={templateOpts} summaries={Object.fromEntries(sums.map((x) => [x.templateKey, x.content]))}
-          initialSeekMs={initialSeekMs} highlights={hlViews} clips={clipViews} durationMs={rec!.durationMs ?? 0}
+          initialSeekMs={initialSeekMs} playlists={myPlaylists} highlights={hlViews} clips={clipViews} durationMs={rec!.durationMs ?? 0}
           defaultTemplate={prefs?.defaultTemplate ?? DEFAULT_TEMPLATE} insights={ins ? { status: ins.status, error: ins.error } : null} />
       )}
 

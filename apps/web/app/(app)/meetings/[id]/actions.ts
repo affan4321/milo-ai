@@ -126,5 +126,7 @@ export async function revokeClipShareAction(clipId: string) {
 export async function setVisibilityAction(meetingId: string, visibility: "private" | "team") {
   await ownedMeeting(meetingId);
   await getDb().update(meetings).set({ visibility: visibility === "team" ? "team" : "private" }).where(eq(meetings.id, meetingId));
+  // Sharing with the team makes teammates' keyword alerts applicable to this meeting: re-check them.
+  if (visibility === "team") { const [rec] = await getDb().select().from(recordings).where(eq(recordings.meetingId, meetingId)); if (rec) await enqueue("alerts", { recordingId: rec.id }); }
   revalidatePath(`/meetings/${meetingId}`);
 }

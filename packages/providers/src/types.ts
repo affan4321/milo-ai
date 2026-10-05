@@ -30,6 +30,10 @@ export interface AnswerContext { id: string; text: string; ms: number; meeting: 
 export interface AnswerInput { question: string; history?: { role: "user" | "assistant"; content: string }[]; context: AnswerContext[] }
 export interface LlmInput { transcript: string; templatePrompt: string; durationMs: number }
 export interface LlmProvider {
+  /** Which embedding model this provider uses. Vectors from different models are NOT comparable, so every stored vector remembers its model. */
+  readonly embedModel?: string;
+  /** False when embedding has no usage allowance to protect (e.g. a model running locally). Default true. */
+  readonly embedMetered?: boolean;
   /** Summary + action items + chapters in one call. `transcript` lines look like "[t=754] Name: text" (t = seconds). */
   insights(args: LlmInput): Promise<InsightsOut>;
   /** Summary only, for switching templates after the first pass. */
@@ -46,4 +50,6 @@ export interface CalendarEventOut {
 }
 export interface CalendarProvider { listUpcoming(): Promise<CalendarEventOut[]> }
 
-export interface EmailProvider { send(args: { to: string; subject: string; html: string }): Promise<void> }
+export interface EmailMessage { to: string; subject: string; html: string; text?: string }
+/** Throws on failure (so the queue retries); a provider that silently drops mail would lose recaps. */
+export interface EmailProvider { send(args: EmailMessage): Promise<void> }

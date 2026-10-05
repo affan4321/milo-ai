@@ -28,7 +28,7 @@ export async function createBotSession(db: Db, a: {
   if (!(SUPPORTED_PLATFORMS as readonly string[]).includes(link.platform)) return { error: `Milo can't join ${link.platform === "zoom" ? "Zoom" : "Teams"} calls yet. Google Meet works today.` };
   const [prefs] = await db.select().from(preferences).where(eq(preferences.userId, a.ownerId));
   const [meeting] = await db.insert(meetings).values({
-    ownerId: a.ownerId, workspaceId: await ensureWorkspace(db, a.ownerId), calendarEventId: a.calendarEventId ?? null, title: a.title?.trim() || "Meeting", status: "scheduled", captureSource: "bot", startedAt: a.startedAt ?? new Date(),
+    ownerId: a.ownerId, workspaceId: await ensureWorkspace(db, a.ownerId), visibility: prefs?.defaultVisibility === "team" ? "team" : "private", calendarEventId: a.calendarEventId ?? null, title: a.title?.trim() || "Meeting", status: "scheduled", captureSource: "bot", startedAt: a.startedAt ?? new Date(),
   }).returning();
   const [session] = await db.insert(botSessions).values({ meetingId: meeting!.id, meetingUrl: link.url, platform: link.platform }).returning();
   const wantConsent = a.consentMessage ?? prefs?.consentMessage ?? true;
@@ -41,7 +41,7 @@ export async function createBotSession(db: Db, a: {
  * link within six hours don't put two bots in one call.
  */
 export async function planBotJoins(db: Db, now = new Date()): Promise<BotJob[]> {
-  const events = await db.select({ ev: calendarEvents, userId: calendarConnections.userId, email: users.email, rule: preferences.autoRecordRule, consent: preferences.consentMessage, onboarded: preferences.onboarded })
+  const events = await db.select({ ev: calendarEvents, userId: calendarConnections.userId, email: users.email, rule: preferences.autoRecordRule, consent: preferences.consentMessage, onboarded: preferences.onboarded, platforms: preferences.recordPlatforms })
     .from(calendarEvents)
     .innerJoin(calendarConnections, eq(calendarConnections.id, calendarEvents.connectionId))
     .innerJoin(users, eq(users.id, calendarConnections.userId))
@@ -53,7 +53,7 @@ export async function planBotJoins(db: Db, now = new Date()): Promise<BotJob[]> 
     ));
   const jobs: BotJob[] = [];
   for (const r of events) {
-    if (!r.onboarded || !r.ev.meetingUrl || !shouldRecord(r.rule, r.email, { organizerEmail: r.ev.organizerEmail, attendees: r.ev.attendees })) continue;
+    if (!r.onboarded || !r.ev.meetingUrl || !r.platforms.includes(r.ev.platform) || !shouldRecord(r.rule, r.email, { organizerEmail: r.ev.organizerEmail, attendees: r.ev.attendees })) continue;
     const [already] = await db.select({ id: meetings.id }).from(meetings).where(eq(meetings.calendarEventId, r.ev.id));
     if (already) continue;
     const url = detectMeeting(r.ev.meetingUrl)?.url ?? r.ev.meetingUrl;

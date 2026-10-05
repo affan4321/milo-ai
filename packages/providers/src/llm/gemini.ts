@@ -19,14 +19,14 @@ const INSIGHTS = {
   },
 };
 
-const ANSWER_SYSTEM = `You are Milo, answering questions about the user's meetings. Use ONLY the numbered excerpts you are given.
+export const ANSWER_SYSTEM = `You are Milo, answering questions about the user's meetings. Use ONLY the numbered excerpts you are given.
 - Cite the excerpts you rely on with their numbers in square brackets, like [2] or [1][4], right after the claim they support.
 - If the excerpts don't contain the answer, say you couldn't find it in these meetings. Never guess or add outside knowledge.
 - Be concise. Name people and say which meeting something came from when it helps.
 - "cited" must list the excerpt numbers you used.`;
 const ANSWER_SCHEMA = { type: "OBJECT", required: ["answer", "cited"], properties: { answer: { type: "STRING" }, cited: { type: "ARRAY", items: { type: "STRING" } } } };
 
-const SYSTEM = `You write meeting notes for Milo. Use ONLY the transcript provided; never invent facts, names, numbers or commitments.
+export const SYSTEM = `You write meeting notes for Milo. Use ONLY the transcript provided; never invent facts, names, numbers or commitments.
 Transcript lines look like "[t=754] Speaker: text", where t is the time in seconds.
 Every bullet, action item and chapter must carry "t": the t of the transcript line that best supports it.
 Action items are concrete commitments or tasks; set "assignee" to the speaker's name only when it is clear who owns it.
@@ -35,9 +35,10 @@ Chapters are the major topic changes, in time order, starting near t=0. Write in
 export interface GeminiOptions { apiKey: string; model?: string; fallbackModels?: string[]; embedModels?: string[]; fetch?: typeof fetch }
 
 export class GeminiLlm implements LlmProvider {
+  readonly embedModel: string; readonly embedMetered = true;
   private model: string;
   private f: typeof fetch;
-  constructor(private o: GeminiOptions) { this.model = o.model ?? "gemini-2.5-flash"; this.f = o.fetch ?? fetch; }
+  constructor(private o: GeminiOptions) { this.model = o.model ?? "gemini-2.5-flash"; this.embedModel = o.embedModels?.[0] ?? "gemini-embedding-001"; this.f = o.fetch ?? fetch; }
 
   private async generate(schema: object, userText: string): Promise<unknown> {
     const models = [this.model, ...(this.o.fallbackModels ?? [])];

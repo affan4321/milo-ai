@@ -21,7 +21,9 @@
     "@milo/intelligence": "workspace:*",
     "@milo/sharing": "workspace:*",
     "@milo/indexing": "workspace:*",
-    "@milo/search": "workspace:*"
+    "@milo/search": "workspace:*",
+    "@milo/notify": "workspace:*",
+    "@milo/playlists": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",

@@ -4,6 +4,10 @@ import { BOT_ACTIVE_STATES } from "@milo/core";
 import { botCapacity } from "@milo/calendar";
 import { botStatusText } from "@/lib/bot-status";
 import { getDb, calendarConnections, calendarEvents, meetings, botSessions } from "@milo/db";
+import { listTeamMeetings } from "@milo/search";
+import { RECORD_RULES, SHARE_RULES } from "@/lib/onboarding";
+import { getPrefs } from "@/lib/onboarding-state";
+import { HomeTabs } from "../home-tabs";
 import { AutoRefresh } from "../meetings/[id]/auto-refresh";
 import { SendMilo } from "./send-milo";
 import { RecordToggle } from "./record-toggle";
@@ -15,9 +19,32 @@ import { resyncAction } from "./actions";
 export const dynamic = "force-dynamic";
 const label = { meet: "Google Meet", zoom: "Zoom", teams: "Teams", unknown: "No meeting link" } as const;
 
-export default async function Home() {
+export default async function Home({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const user = await getCurrentUser();
   const db = getDb();
+  if ((await searchParams).tab === "team") {
+    const team = await listTeamMeetings(db, user.id);
+    return (
+      <div className="max-w-3xl">
+        <HomeTabs active="team" />
+        {team.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-border p-6 text-sm text-muted">No team calls yet. When a teammate shares a meeting with the team, it appears here, and in search and Ask Milo (Team calls).</p>
+        ) : (
+          <ul className="divide-y divide-border rounded-lg border border-border bg-surface">
+            {team.map((m) => (
+              <li key={m.id}><Link href={`/meetings/${m.id}`} className="flex items-center justify-between p-4 hover:bg-bg">
+                <div><div className="font-medium">{m.title}</div><div className="text-sm text-muted">{m.owner} · {m.createdAt.toLocaleString()}</div></div>
+                <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted">Team</span>
+              </Link></li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+  }
+  const prefs = await getPrefs(user.id);
+  const recordLabel = RECORD_RULES.find((r) => r.value === prefs.autoRecordRule)?.label ?? "";
+  const shareLabel = SHARE_RULES.find((r) => r.value === prefs.autoShareRule)?.label ?? "";
   const conns = await db.select().from(calendarConnections).where(eq(calendarConnections.userId, user.id));
   const events = conns.length
     ? await db.select().from(calendarEvents)
@@ -34,6 +61,7 @@ export default async function Home() {
 
   return (
     <div className="max-w-3xl space-y-8">
+      <HomeTabs active="calls" />
       {live.length > 0 && <AutoRefresh ms={3000} />}
       {live.length > 0 && (
         <section className="space-y-2">
@@ -79,6 +107,14 @@ export default async function Home() {
             ))}
           </ul>
         )}
+      </section>
+      <section className="rounded-lg border border-border bg-surface p-4 text-sm">
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Meeting preferences</div>
+        <ul className="space-y-1">
+          <li>{prefs.autoRecordRule === "none" ? "✗ Milo won't join meetings automatically" : `✓ Milo joins automatically: ${recordLabel.toLowerCase()}`}</li>
+          <li>{prefs.autoShareRule === "none" ? "✗ Recaps aren't emailed to anyone" : `✓ Recaps are emailed to ${shareLabel.toLowerCase()}`}</li>
+        </ul>
+        <Link href="/customize" className="mt-3 inline-block text-accent hover:underline">Edit settings</Link>
       </section>
       <ConnectIcsForm />
       <section className="flex flex-wrap items-start gap-3">

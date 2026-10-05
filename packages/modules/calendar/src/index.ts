@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { calendarConnections, calendarEvents, type Db } from "@milo/db";
-import { GoogleCalendar, IcsCalendar, type CalendarProvider } from "@milo/providers";
+import { GoogleCalendar, IcsCalendar, MicrosoftCalendar, type CalendarProvider } from "@milo/providers";
 
 function providerFor(conn: typeof calendarConnections.$inferSelect): CalendarProvider | null {
   if (conn.kind === "ics" && conn.icsUrl) return new IcsCalendar(conn.icsUrl);
@@ -8,6 +8,11 @@ function providerFor(conn: typeof calendarConnections.$inferSelect): CalendarPro
     const { GOOGLE_CLIENT_ID: clientId, GOOGLE_CLIENT_SECRET: clientSecret } = process.env;
     if (!clientId || !clientSecret) throw new Error("Google credentials are not configured on the server");
     return new GoogleCalendar({ clientId, clientSecret, refreshToken: conn.refreshToken });
+  }
+  if (conn.kind === "microsoft" && conn.refreshToken) {
+    const { AZURE_AD_CLIENT_ID: clientId, AZURE_AD_CLIENT_SECRET: clientSecret, AZURE_AD_TENANT_ID: tenant } = process.env;
+    if (!clientId || !clientSecret) throw new Error("Microsoft credentials are not configured on the server");
+    return new MicrosoftCalendar({ clientId, clientSecret, refreshToken: conn.refreshToken, tenant: tenant || "common" });
   }
   return null;
 }
@@ -46,14 +51,15 @@ export async function connectIcs(db: Db, userId: string, icsUrl: string) {
   return { connectionId: conn.id, ...(await syncConnection(db, conn.id)) };
 }
 
-/** Called at Google sign-in. Keeps one google connection per user and refreshes its token (Google only returns one on consent). */
-export async function saveGoogleConnection(db: Db, userId: string, refreshToken: string | undefined) {
-  const [existing] = await db.select().from(calendarConnections).where(sql`${calendarConnections.userId} = ${userId} and ${calendarConnections.kind} = 'google'`);
+/** Called at OAuth sign-in. Keeps one connection of that kind per user and refreshes its token (providers only return one on consent). */
+export async function saveOAuthConnection(db: Db, userId: string, kind: "google" | "microsoft", refreshToken: string | undefined) {
+  const [existing] = await db.select().from(calendarConnections).where(sql`${calendarConnections.userId} = ${userId} and ${calendarConnections.kind} = ${kind}`);
   if (existing) {
     if (refreshToken) await db.update(calendarConnections).set({ refreshToken, lastError: null }).where(eq(calendarConnections.id, existing.id));
     return existing.id;
   }
   if (!refreshToken) return null;
-  return (await db.insert(calendarConnections).values({ userId, kind: "google", refreshToken }).returning())[0]!.id;
+  return (await db.insert(calendarConnections).values({ userId, kind, refreshToken }).returning())[0]!.id;
 }
+export const saveGoogleConnection = (db: Db, userId: string, refreshToken: string | undefined) => saveOAuthConnection(db, userId, "google", refreshToken);
 export * from "./bot";

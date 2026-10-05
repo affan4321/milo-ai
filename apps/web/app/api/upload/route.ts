@@ -1,7 +1,7 @@
 import { Readable } from "node:stream";
 import { eq } from "drizzle-orm";
 import { Events } from "@milo/core";
-import { getDb, meetings, recordings, ensureStages, ensureWorkspace } from "@milo/db";
+import { getDb, meetings, recordings, ensureStages, ensureWorkspace, preferences } from "@milo/db";
 import { getProviders } from "@milo/providers";
 import { getCurrentUser } from "@/lib/session";
 import { enqueue } from "@/lib/queue";
@@ -22,7 +22,8 @@ export async function PUT(req: Request) {
 
   const db = getDb(), { storage } = getProviders();
   const title = decodeURIComponent(req.headers.get("x-title") ?? "").trim() || filename.replace(/\.[^.]+$/, "");
-  const [meeting] = await db.insert(meetings).values({ ownerId: user.id, workspaceId: await ensureWorkspace(db, user.id), title, status: "processing", captureSource: "upload", startedAt: new Date() }).returning();
+  const [prefs] = await db.select().from(preferences).where(eq(preferences.userId, user.id));
+  const [meeting] = await db.insert(meetings).values({ ownerId: user.id, workspaceId: await ensureWorkspace(db, user.id), visibility: prefs?.defaultVisibility === "team" ? "team" : "private", title, status: "processing", captureSource: "upload", startedAt: new Date() }).returning();
   const key = `meetings/${meeting!.id}/raw.${ext}`;
   try {
     const bytes = await storage.putStream(key, Readable.fromWeb(req.body as never));

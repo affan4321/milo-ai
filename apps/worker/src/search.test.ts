@@ -1,9 +1,9 @@
 // Indexing, hybrid search, scopes and Ask Milo against Postgres with deterministic fake embeddings.
 // Run: npx tsx --env-file=.env apps/worker/src/search.test.ts
 import { eq, inArray, sql } from "drizzle-orm";
-import { getDb, users, meetings, recordings, speakers, transcriptSegments, ensureWorkspace, askThreads, pipelineStage } from "@milo/db";
+import { getDb, users, meetings, recordings, speakers, transcriptSegments, ensureWorkspace, askThreads, pipelineStage, reserveDaily } from "@milo/db";
 import { FakeLlm } from "@milo/providers";
-import { indexRecording, unindexedCount } from "@milo/indexing";
+import { indexRecording, unindexedCount, findUnindexedRecordings } from "@milo/indexing";
 import { searchMeetings, askMilo, editMessage, listThreads, deleteThread, loadThread, renumberCitations, hybridHits } from "@milo/search";
 
 let fails = 0;
@@ -46,10 +46,39 @@ check(calls === 1 && await unindexedCount(db, M1.id) === 0, `a retry re-embeds o
 
 // pacing: 100 lines at 70 texts/min must wait between chunks (but not after the last), and stay under the per-minute budget
 const M6 = await meeting(A, "Pacing meeting", "private", Array.from({ length: 100 }, (_, i) => ["Ada", `Pacing line number ${i} about quarterly budget`] as [string, string]));
-const sleeps: number[] = []; const t0 = Date.now();
-await indexRecording(db, llm, M6.recId, { textsPerMinute: 70, sleep: async (ms) => { sleeps.push(ms); } });
+const sleeps: number[] = []; const t0 = Date.now(); const metered = Object.assign(new FakeLlm(), { embedMetered: true });
+await indexRecording(db, metered, M6.recId, { textsPerMinute: 70, budgetKey: "embed-test", dailyBudget: 1_000_000, sleep: async (ms) => { sleeps.push(ms); } });
 check(sleeps.length === 2 && sleeps.every((s) => s > 29_000 && s < 31_000), `100 lines -> 3 chunks, paced: waits ${sleeps.map((s) => Math.round(s / 1000) + "s").join(", ")} between them (35 texts / 70 per min = 30s)`);
 check(Date.now() - t0 < 20_000 && await unindexedCount(db, M6.id) === 0, "all lines embedded (the test did not actually sleep)");
+
+// daily budget: indexing stops cleanly when its share of the provider's daily allowance is spent, keeps what it did, and resumes later
+const M7 = await meeting(A, "Budget meeting", "private", Array.from({ length: 90 }, (_, i) => ["Ada", `Budget test line ${i} about forecasting`] as [string, string]));
+await db.execute(sql`delete from usage_counters where key = 'embed-test'`);
+let capped: any = await indexRecording(db, metered, M7.recId, { textsPerMinute: Infinity, dailyBudget: 80, budgetKey: "embed-test" }).catch((e) => e);
+check(capped instanceof Error && /paused for today/.test(capped.message) && (capped as any).constructor.name === "DailyQuotaError", "out of daily budget: a clear 'paused for today' error (not retried)");
+check(await unindexedCount(db, M7.id) === 20, `70 lines were embedded before the budget ran out (20 of 90 left) - the work done is kept`);
+capped = await indexRecording(db, metered, M7.recId, { textsPerMinute: Infinity, dailyBudget: 80, budgetKey: "embed-test" }).catch((e) => e);
+check(capped instanceof Error && await unindexedCount(db, M7.id) === 20, "asking again the same day embeds nothing more");
+await db.execute(sql`update usage_counters set day = '2000-01-01' where key = 'embed-test'`);   // "tomorrow"
+await indexRecording(db, metered, M7.recId, { textsPerMinute: Infinity, dailyBudget: 80, budgetKey: "embed-test" });
+check(await unindexedCount(db, M7.id) === 0, "the next day it resumes and finishes the remaining lines");
+await db.execute(sql`delete from usage_counters where key = 'embed-test'`);
+check(await reserveDaily(db, "k", 5, 10) && await reserveDaily(db, "k", 5, 10) && !(await reserveDaily(db, "k", 1, 10)) && !(await reserveDaily(db, "k", 11, 10)), "reserveDaily: fills exactly to the limit, then refuses (and a single oversized ask is refused)");
+await db.execute(sql`delete from usage_counters where key = 'k'`);
+
+// model identity: vectors from another model are never mixed in; switching models re-embeds, and local (unmetered) models skip the daily budget
+const M8 = await meeting(A, "Model switch meeting", "private", Array.from({ length: 6 }, (_, i) => ["Ada", `Switching embedding model line ${i} about quarterly forecasting`] as [string, string]));
+await indexRecording(db, llm, M8.recId, { textsPerMinute: Infinity });
+check(await unindexedCount(db, M8.id, "fake-bow") === 0 && await unindexedCount(db, M8.id, "some-other-model") === 6, "each line remembers which model embedded it");
+await db.execute(sql`update transcript_segments set embedding_model = 'gemini-embedding-001' where meeting_id = ${M8.id}`);   // pretend an older model made them
+const sw = await searchMeetings(db, llm, A.id, { q: "quarterly forecasting switching", scope: "my" });
+check(sw.results.some((x) => x.meetingId === M8.id) && sw.results.find((x) => x.meetingId === M8.id)!.hits.every((h) => h.via === "keyword"), "vectors from a different model are ignored (the meeting is still found by keyword)");
+let calls8 = 0; const counting8 = Object.assign(new FakeLlm(), { embed: async (t: string[], k?: any) => { calls8 += t.length; return new FakeLlm().embed(t, k); } });
+await indexRecording(db, counting8, M8.recId, { textsPerMinute: Infinity, dailyBudget: 1 });   // budget of 1 would block a metered provider; this one is local
+check(calls8 === 6 && await unindexedCount(db, M8.id, "fake-bow") === 0, "switching model re-embeds every line, and an unmetered (local) model ignores the daily budget");
+const sw2 = await searchMeetings(db, llm, A.id, { q: "quarterly forecasting switching", scope: "my" });
+check(sw2.results.find((x) => x.meetingId === M8.id)!.hits.some((h) => h.via !== "keyword"), "after re-embedding, meaning-based matches work again");
+check((await findUnindexedRecordings(db, "fake-bow")).every((id) => id !== M8.recId) && (await findUnindexedRecordings(db, "another-model")).includes(M8.recId), "the sweep queues meetings embedded by a different model");
 
 // ---------- search & scopes ----------
 const ids = (r: { results: { meetingId: string }[] }) => r.results.map((x) => x.meetingId);

@@ -29,6 +29,10 @@ export const preferences = pgTable("preferences", {
   accountType: text("account_type").notNull().default("team"), // personal | team
   consentAcknowledgedAt: timestamp("consent_acknowledged_at", { withTimezone: true }),
   consentMessage: boolean("consent_message").notNull().default(true),
+  recapEmail: boolean("recap_email").notNull().default(true),
+  alertEmails: boolean("alert_emails").notNull().default(true),
+  defaultVisibility: text("default_visibility").notNull().default("private"), // new meetings: private | team
+  recordPlatforms: jsonb("record_platforms").$type<string[]>().notNull().default(["meet", "zoom", "teams"]),
   onboarded: boolean("onboarded").notNull().default(false),
 });
 
@@ -58,6 +62,7 @@ export const meetings = pgTable("meetings", {
   status: text("status").notNull().default("scheduled"), captureSource: text("capture_source").notNull().default("upload"),
   /** "private" = only the owner; "team" = visible to the owner's workspace in Team calls, search and Ask. */
   visibility: text("visibility").notNull().default("private"),
+  recapSentAt: timestamp("recap_sent_at", { withTimezone: true }),
   createdAt: createdAt(),
 });
 export const botSessions = pgTable("bot_sessions", {
@@ -96,6 +101,8 @@ export const transcriptSegments = pgTable("transcript_segments", {
   startMs: integer("start_ms").notNull(), endMs: integer("end_ms").notNull(), text: text("text").notNull(),
   words: jsonb("words").$type<{ w: string; s: number; e: number }[]>(),
   tsv: tsvector("tsv"), embedding: vector("embedding", { dimensions: 768 }),
+  /** Which model produced `embedding`. Vectors from different models are not comparable, so search only uses rows matching the active model. */
+  embeddingModel: text("embedding_model"),
 }, (t) => [index("seg_meeting_idx").on(t.meetingId, t.startMs)]);
 
 // ---- intelligence ----
@@ -138,7 +145,8 @@ export const shares = pgTable("shares", {
   views: integer("views").notNull().default(0),
 });
 export const playlists = pgTable("playlists", {
-  id: id(), workspaceId: ref("workspace_id").references(() => workspaces.id), name: text("name").notNull(),
+  id: id(), workspaceId: ref("workspace_id").references(() => workspaces.id), ownerId: ref("owner_id").references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(), createdAt: createdAt(),
 });
 export const playlistItems = pgTable("playlist_items", {
   id: id(), playlistId: ref("playlist_id").references(() => playlists.id, { onDelete: "cascade" }),
@@ -146,12 +154,15 @@ export const playlistItems = pgTable("playlist_items", {
   startMs: integer("start_ms"), endMs: integer("end_ms"), position: integer("position").notNull().default(0),
 });
 export const alerts = pgTable("alerts", {
-  id: id(), workspaceId: ref("workspace_id").references(() => workspaces.id), keyword: text("keyword").notNull(),
+  id: id(), workspaceId: ref("workspace_id").references(() => workspaces.id), userId: ref("user_id").references(() => users.id, { onDelete: "cascade" }),
+  keyword: text("keyword").notNull(), notifyEmail: boolean("notify_email").notNull().default(true),
+  lastViewedAt: timestamp("last_viewed_at", { withTimezone: true }), createdAt: createdAt(),
 });
 export const alertHits = pgTable("alert_hits", {
   id: id(), alertId: ref("alert_id").references(() => alerts.id, { onDelete: "cascade" }),
-  meetingId: ref("meeting_id").references(() => meetings.id, { onDelete: "cascade" }), segmentId: uuid("segment_id"),
-});
+  meetingId: ref("meeting_id").references(() => meetings.id, { onDelete: "cascade" }), segmentId: uuid("segment_id").notNull(),
+  startMs: integer("start_ms").notNull().default(0), snippet: text("snippet").notNull().default(""), createdAt: createdAt(),
+}, (t) => [uniqueIndex("alert_hits_uq").on(t.alertId, t.segmentId)]);
 export const askThreads = pgTable("ask_threads", {
   id: id(), userId: ref("user_id").references(() => users.id, { onDelete: "cascade" }), scope: text("scope").notNull().default("my"),
   title: text("title"), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(), createdAt: createdAt(),
@@ -162,6 +173,11 @@ export const askMessages = pgTable("ask_messages", {
   threadId: ref("thread_id").references(() => askThreads.id, { onDelete: "cascade" }),
   role: text("role").notNull(), content: text("content").notNull(), citedSegmentIds: jsonb("cited_segment_ids").$type<string[]>().default([]),
 });
+
+/** Per-day counters for rate-limited resources (e.g. embedded texts against a provider's free daily allowance). */
+export const usageCounters = pgTable("usage_counters", {
+  key: text("key").notNull(), day: text("day").notNull(), count: integer("count").notNull().default(0),
+}, (t) => [uniqueIndex("usage_counters_uq").on(t.key, t.day)]);
 
 // ---- pipeline ----
 export const pipelineStage = pgTable("pipeline_stage", {

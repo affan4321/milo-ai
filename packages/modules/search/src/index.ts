@@ -37,12 +37,12 @@ async function keywordRows(db: Db, userId: string, scope: Scope, q: string, n: n
     ORDER BY ts_rank_cd(s.tsv, query) DESC, s.start_ms LIMIT ${n}`);
   return r as unknown as Row[];
 }
-async function vectorRows(db: Db, userId: string, scope: Scope, vec: number[], n: number): Promise<Row[]> {
+async function vectorRows(db: Db, userId: string, scope: Scope, vec: number[], n: number, model: string): Promise<Row[]> {
   const lit = vectorLiteral(vec);
   const r = await db.execute(sql`
     SELECT ${SEG_COLS}, 1 - (s.embedding <=> ${lit}::vector) AS sim
     ${SEG_FROM}
-    WHERE s.embedding IS NOT NULL AND ${visible(userId, scope)}
+    WHERE s.embedding IS NOT NULL AND s.embedding_model = ${model} AND ${visible(userId, scope)}
     ORDER BY s.embedding <=> ${lit}::vector LIMIT ${n}`);
   return r as unknown as Row[];
 }
@@ -59,7 +59,7 @@ export async function hybridHits(db: Db, llm: LlmProvider, userId: string, scope
   if (!query) return { hits: [], degraded: false };
   const kw = await keywordRows(db, userId, scope, query, POOL);
   let vec: Row[] = [], degraded = false;
-  try { vec = await vectorRows(db, userId, scope, (await llm.embed([query], "query"))[0]!, POOL); }
+  try { vec = await vectorRows(db, userId, scope, (await llm.embed([query], "query"))[0]!, POOL, llm.embedModel ?? "unknown"); }
   catch { degraded = true; }
   const top = vec[0]?.sim ?? 0;
   vec = vec.filter((r) => (r.sim ?? 0) >= SIM_FLOOR && (r.sim ?? 0) >= top - SIM_WINDOW);
@@ -98,6 +98,14 @@ export async function searchMeetings(db: Db, llm: LlmProvider, userId: string, o
     }
   }
   return { results: [...groups.values()].sort((a, b) => b.score - a.score).slice(0, o.limit ?? 20), degraded };
+}
+
+/** Teammates' meetings shared with the team, newest first (the "Team calls" tab). Same visibility rule as search and Ask. */
+export async function listTeamMeetings(db: Db, userId: string, limit = 50) {
+  const rows = await db.execute(sql`
+    SELECT m.id, m.title, m.created_at, m.capture_source, coalesce(u.name, split_part(u.email, '@', 1)) AS owner
+    FROM meetings m JOIN users u ON u.id = m.owner_id WHERE ${visible(userId, "team")} ORDER BY m.created_at DESC LIMIT ${limit}`) as unknown as { id: string; title: string; created_at: string; capture_source: string; owner: string }[];
+  return rows.map((r) => ({ id: r.id, title: r.title, createdAt: new Date(r.created_at), source: r.capture_source, owner: r.owner }));
 }
 
 // ---------------- Ask Milo ----------------

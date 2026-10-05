@@ -1,6 +1,7 @@
 import PgBoss from "pg-boss";
 import { BOT_JOIN_QUEUE, BOT_QUEUE_OPTIONS, Events, isPermanent } from "@milo/core";
-import { getDb, calendarConnections } from "@milo/db";
+import { getDb, calendarConnections, recordings, runStage } from "@milo/db";
+import { eq } from "drizzle-orm";
 import { getProviders } from "@milo/providers";
 import { planBotJoins, reapStaleBotSessions, syncConnection } from "@milo/calendar";
 import { processMedia } from "@milo/media";
@@ -8,6 +9,7 @@ import { transcribeRecording } from "@milo/transcription";
 import { generateInsights } from "@milo/intelligence";
 import { renderClip } from "@milo/sharing";
 import { findUnindexedRecordings, indexRecording } from "@milo/indexing";
+import { evaluateAlertsForMeeting, sendRecap } from "@milo/notify";
 
 const boss = new PgBoss(process.env.DATABASE_URL ?? "postgres://milo:milo@localhost:5433/milo");
 boss.on("error", (e) => console.error("[boss]", e));
@@ -46,7 +48,8 @@ await boss.work<RecordingJob>(Events.MediaReady, async (jobs) => {
       const r = await transcribeRecording(db, providers.storage, providers.stt, j.data.recordingId);
       console.log(`[transcription] ${j.data.recordingId} ${r.segments} segments`);
       await boss.send(Events.TranscriptReady, j.data);
-      await boss.send("indexing", j.data); // search/Ask indexing runs beside the summary, never waiting on it
+      await boss.send("indexing", j.data, { priority: 10 }); // fresh meetings jump ahead of any backlog; runs beside the summary, never waiting on it
+      await boss.send("alerts", j.data);   // so do keyword alerts: they need only the transcript
     } catch (e) {
       if (isPermanent(e)) { console.warn(`[transcription] ${j.data.recordingId} failed permanently: ${e.message}`); continue; }
       throw e;
@@ -69,8 +72,32 @@ await boss.work<RecordingJob>(Events.TranscriptReady, { batchSize: 1, pollingInt
     }
   }
 });
+// notify: the recap email goes out once the summary exists. A failure here never touches the meeting itself.
+const APP_URL = process.env.APP_URL ?? "http://localhost:3000";
 await queue(Events.InsightsReady);
-await boss.work(Events.InsightsReady, async (jobs) => { for (const j of jobs) console.log(`[worker] ${Events.InsightsReady} (no consumer yet)`, j.id); });
+await boss.work<RecordingJob>(Events.InsightsReady, async (jobs) => {
+  for (const j of jobs) {
+    try {
+      const [rec] = await db.select().from(recordings).where(eq(recordings.id, j.data.recordingId));
+      if (!rec) continue;
+      const r = await runStage(db, j.data.recordingId, "notify", () => sendRecap(db, providers.email, rec.meetingId, APP_URL));
+      console.log(`[notify] recap ${j.data.recordingId}`, r);
+    } catch (e) { if (isPermanent(e)) { console.warn(`[notify] recap ${j.data.recordingId} failed permanently: ${e.message}`); continue; } throw e; }
+  }
+});
+
+// alerts: match users' watched words against the transcript (and email the matches).
+await queue("alerts");
+await boss.work<RecordingJob>("alerts", async (jobs) => {
+  for (const j of jobs) {
+    try {
+      const [rec] = await db.select().from(recordings).where(eq(recordings.id, j.data.recordingId));
+      if (!rec) continue;
+      const r = await evaluateAlertsForMeeting(db, providers.email, rec.meetingId, APP_URL);
+      if (r.newHits) console.log(`[alerts] ${rec.meetingId}`, r);
+    } catch (e) { if (isPermanent(e)) { console.warn(`[alerts] failed permanently: ${e.message}`); continue; } throw e; }
+  }
+});
 
 // indexing: embed transcript lines for search and Ask. Throttled like the other LLM-backed stage, and independent of the summary.
 // createQueue only sets options the FIRST time, so also updateQueue: a changed setting takes effect on the next start.
@@ -86,7 +113,7 @@ await boss.work<RecordingJob>("indexing", { batchSize: 1, pollingIntervalSeconds
 // Sweep: queue indexing for any meeting with un-embedded lines (older meetings, or earlier failures). At start, then every 30 minutes.
 // singletonKey (20 min, shorter than the 30 min sweep) stops a restart from queuing the same recording twice, but never blocks a retry of a failed one.
 const sweepIndexing = async () => {
-  for (const recordingId of await findUnindexedRecordings(db)) await boss.send("indexing", { recordingId }, { singletonKey: recordingId, singletonSeconds: 1200 });
+  for (const recordingId of await findUnindexedRecordings(db, providers.llm.embedModel ?? "unknown")) await boss.send("indexing", { recordingId }, { singletonKey: recordingId, singletonSeconds: 1200 });
 };
 await sweepIndexing().catch((e) => console.warn("[indexing] sweep failed:", e instanceof Error ? e.message : e));
 setInterval(() => void sweepIndexing().catch(() => {}), 30 * 60_000);
