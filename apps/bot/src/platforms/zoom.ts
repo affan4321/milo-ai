@@ -52,7 +52,7 @@ export class ZoomAdapter extends WebAdapter implements PlatformAdapter {
       leave: await vis(page.locator(S.leaveButton)),
       join: await page.getByRole("button", { name: S.joinButton }).first().isVisible().catch(() => false),
       nameInput: await vis(page.locator(S.nameInput)),
-      captcha: (await page.locator(S.captcha).count().catch(() => 0)) > 0,
+      captcha: await page.locator(S.captcha).first().isVisible().catch(() => false), // a hidden frame is not a challenge
     });
   }
 

@@ -39,7 +39,7 @@ export class TeamsAdapter extends WebAdapter implements PlatformAdapter {
       leave: await vis(page.locator(S.leaveButton)),
       join: await page.getByRole("button", { name: S.joinButton }).first().isVisible().catch(() => false),
       joinOnWeb: await page.getByRole("button", { name: S.joinOnWeb }).first().isVisible().catch(() => false) || await page.getByRole("link", { name: S.joinOnWeb }).first().isVisible().catch(() => false),
-      captcha: (await page.locator('iframe[src*="recaptcha" i]').count().catch(() => 0)) > 0,
+      captcha: await page.locator('iframe[src*="recaptcha" i]').first().isVisible().catch(() => false), // a hidden frame is not a challenge
     });
   }
 

@@ -22,7 +22,8 @@ export class MeetAdapter extends WebAdapter implements PlatformAdapter {
     if (TEXT.waiting.test(text)) return "waiting";
     if (await visible(S.leaveButton)) return "in_call";
     if (TEXT.removed.test(text)) return "removed";
-    if ((await page.locator(S.captcha).count().catch(() => 0)) > 0 || TEXT.captcha.test(text)) return "captcha";
+    // Meet always loads a hidden reCAPTCHA frame, even on the "Connecting…" screen: only a VISIBLE challenge (or its wording) is a block.
+    if ((await page.locator(S.captcha).first().isVisible().catch(() => false)) || TEXT.captcha.test(text)) return "captcha";
     if (TEXT.denied.test(text)) return "denied";
     if (TEXT.badLink.test(text)) return "bad_link";
     if (TEXT.guestsBlocked.test(text)) return "guests_blocked";
