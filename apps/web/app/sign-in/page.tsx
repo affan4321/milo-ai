@@ -37,6 +37,7 @@ export default async function SignIn({ searchParams }: { searchParams: Promise<{
             {error === "AccessDenied" ? "That account couldn't be signed in. For Google, it must be on the test-user list; for Microsoft, the account's email has to be verified by Microsoft." : "Sign-in failed. Please try again."}
           </p>}
           <p className="mt-6 flex gap-2 text-xs leading-relaxed text-muted"><ShieldCheck className="h-4 w-4 shrink-0 text-subtle" />Milo asks for read-only access to your calendar to know which meetings to join.</p>
+          <p className="mt-3 text-xs leading-relaxed text-muted">By continuing you agree to the <Link href="/terms" className="link">Terms of Service</Link> and <Link href="/privacy" className="link">Privacy Policy</Link>.</p>
         </div>
       </div>
       <div className="relative hidden overflow-hidden bg-gradient-to-br from-[#1E1B4B] to-[#0F172A] lg:flex lg:flex-col lg:items-center lg:justify-center lg:gap-10 lg:p-12">

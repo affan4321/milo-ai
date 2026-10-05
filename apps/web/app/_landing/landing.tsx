@@ -177,7 +177,7 @@ export function Landing({ startHref }: { startHref: string }) {
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4">
             <Logo size="sm" />
             <nav className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted" aria-label="Footer">
-              <a href="#how" className="hover:text-text">How it works</a><a href="#ask" className="hover:text-text">Ask Milo</a><a href="#features" className="hover:text-text">Features</a><Link href={startHref} className="hover:text-text">Sign in</Link>
+              <a href="#how" className="hover:text-text">How it works</a><a href="#ask" className="hover:text-text">Ask Milo</a><a href="#features" className="hover:text-text">Features</a><Link href="/privacy" className="hover:text-text">Privacy</Link><Link href="/terms" className="hover:text-text">Terms</Link><Link href={startHref} className="hover:text-text">Sign in</Link>
             </nav>
             <p className="w-full text-xs text-subtle sm:w-auto">Milo.ai, an AI meeting notetaker.</p>
           </div>
