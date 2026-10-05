@@ -4,7 +4,7 @@ A guided tour for a first-time reviewer, in the order a real user meets things. 
 
 1. **Sign in and onboard.** Google (or Microsoft) sign-in, then connect a calendar or paste an ICS link, choose which calls to
    record and share, and confirm the consent notice. Home then lists real upcoming events with a "Milo will record" switch.
-2. **Send Milo to a call.** Home → "Send Milo to a meeting", paste a Meet or Teams link (or let auto-record do it). The card
+2. **Send Milo to a call.** Home → "Send Milo to a meeting", paste a Meet, Zoom or Teams link (or let auto-record do it). The card
    shows plain-language states: joining, waiting to be admitted, recording, processing, ready. The bot posts a consent message in chat.
 3. **Talk, then `/milo highlight`.** Type it in the meeting chat while talking; the highlight covers the 30 seconds before.
 4. **Open the finished meeting.** Transcript follows playback; click a line to seek; speakers carry real names (rename applies
@@ -18,4 +18,4 @@ A guided tour for a first-time reviewer, in the order a real user meets things. 
 9. **Failure behaviour.** Stop the bot: upload still works. Stop the worker: browsing, playback and search still work. When the
    AI is over its quota the summary shows a clear "retrying" state while transcript and playback remain usable.
 
-What is not verified live: Teams join (selectors), Zoom (not built), Microsoft sign-in, and real email delivery.
+What is not verified live: Teams and Zoom joining (selectors), Microsoft sign-in, and real email delivery.

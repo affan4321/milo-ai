@@ -9,6 +9,9 @@
     "typecheck": "tsc -p ."
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1146.0",
+    "@aws-sdk/lib-storage": "^3.1146.0",
+    "@aws-sdk/s3-request-presigner": "^3.1146.0",
     "@huggingface/transformers": "^3.5.2",
     "@milo/core": "workspace:*",
     "node-ical": "^0.27.3"

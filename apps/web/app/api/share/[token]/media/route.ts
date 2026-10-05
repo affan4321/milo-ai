@@ -11,6 +11,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   const look = await resolveShare(getDb(), (await params).token);
   if (!look.ok) return new Response("Not available", { status: look.reason === "not_found" ? 404 : 410, headers: { "cache-control": "no-store" } });
   const key = look.clip.storageKey!, { storage } = getProviders();
+  if (storage.presignGet) return new Response(null, { status: 302, headers: { location: await storage.presignGet(key, 900), "cache-control": "no-store" } }); // short-lived: a revoked link stops working within minutes
   const size = await storage.size(key);
   if (!size) return new Response("Not found", { status: 404 });
   const base = { "content-type": TYPES[key.split(".").pop()!] ?? "application/octet-stream", "accept-ranges": "bytes", "cache-control": "no-store", "x-content-type-options": "nosniff" };

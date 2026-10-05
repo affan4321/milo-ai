@@ -8,20 +8,40 @@ export function UploadButton() {
   const [pct, setPct] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  function upload(file: File) {
+  function put(url: string, file: File, headers: Record<string, string>): Promise<{ status: number; text: string }> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", url);
+      for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
+      xhr.upload.onprogress = (e) => e.lengthComputable && setPct(Math.round((e.loaded / e.total) * 100));
+      xhr.onerror = () => reject(new Error("Upload failed. Check your connection and try again."));
+      xhr.onload = () => resolve({ status: xhr.status, text: xhr.responseText });
+      xhr.send(file);
+    });
+  }
+
+  async function upload(file: File) {
     setError(null); setPct(0);
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", "/api/upload");
-    xhr.setRequestHeader("x-filename", encodeURIComponent(file.name));
-    xhr.upload.onprogress = (e) => e.lengthComputable && setPct(Math.round((e.loaded / e.total) * 100));
-    xhr.onerror = () => { setPct(null); setError("Upload failed. Check your connection and try again."); };
-    xhr.onload = () => {
+    try {
+      // Ask where the file goes. Cloud storage: straight to the bucket, then tell the app. Local storage: stream through the app.
+      const init = await fetch("/api/upload/init", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ filename: file.name, size: file.size }) });
+      const plan = (await init.json().catch(() => ({}))) as { mode?: string; url?: string; key?: string; contentType?: string; error?: string };
+      if (!init.ok) throw new Error(plan.error ?? `Upload failed (HTTP ${init.status}).`);
       let body: { meetingId?: string; error?: string } = {};
-      try { body = JSON.parse(xhr.responseText); } catch {}
-      if (xhr.status === 200 && body.meetingId) router.push(`/meetings/${body.meetingId}`);
-      else { setPct(null); setError(body.error ?? `Upload failed (HTTP ${xhr.status}).`); }
-    };
-    xhr.send(file);
+      if (plan.mode === "direct" && plan.url && plan.key) {
+        const r = await put(plan.url, file, { "content-type": plan.contentType ?? "application/octet-stream" });
+        if (r.status < 200 || r.status >= 300) throw new Error(`Upload failed (HTTP ${r.status}).`);
+        setPct(100);
+        const done = await fetch("/api/upload/complete", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ key: plan.key, filename: file.name }) });
+        body = await done.json().catch(() => ({}));
+      } else {
+        const r = await put("/api/upload", file, { "x-filename": encodeURIComponent(file.name) });
+        try { body = JSON.parse(r.text); } catch {}
+        if (r.status !== 200 && !body.error) body.error = `Upload failed (HTTP ${r.status}).`;
+      }
+      if (body.meetingId) router.push(`/meetings/${body.meetingId}`);
+      else throw new Error(body.error ?? "Upload failed.");
+    } catch (e) { setPct(null); setError(e instanceof Error ? e.message : "Upload failed."); }
   }
 
   return (

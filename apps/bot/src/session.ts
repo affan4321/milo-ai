@@ -5,6 +5,7 @@ import { api as realApi, HttpError } from "./api";
 import { config } from "./config";
 import { MeetAdapter } from "./platforms/meet";
 import { TeamsAdapter } from "./platforms/teams";
+import { ZoomAdapter } from "./platforms/zoom";
 import type { EndReason, PlatformAdapter } from "./platforms/types";
 import { startRecording, type Recording } from "./recorder";
 import { SidecarCollector } from "./sidecar";
@@ -16,7 +17,7 @@ export interface Deps {
   cfg: Pick<typeof config, "dataDir" | "heartbeatMs" | "aloneGraceMs" | "aloneAtStartMs" | "maxMeetingMs">;
 }
 export const defaultDeps: Deps = {
-  makeAdapter: (platform) => { if (platform === "meet") return new MeetAdapter(); if (platform === "teams") return new TeamsAdapter(); throw new Error(`no join script for ${platform} yet`); },
+  makeAdapter: (platform) => { if (platform === "meet") return new MeetAdapter(); if (platform === "teams") return new TeamsAdapter(); if (platform === "zoom") return new ZoomAdapter(); throw new Error(`no join script for ${platform} yet`); },
   record: startRecording, api: realApi, cfg: config,
 };
 
@@ -55,7 +56,7 @@ export async function runSession(job: BotJob, d: Deps = defaultDeps): Promise<Ou
         // Consent first (people should see it as early as possible), then the watchers. All of it is best-effort:
         // losing captions or chat must never cost us the recording.
         if (job.consentMessage && !(await adapter.postConsent(job.consentMessage).catch(() => false))) console.warn(`${tag} could not post the consent message (chat disabled?)`);
-        await adapter.watchSpeakers((n, t, at) => side.caption(n, t, at)).catch((e) => console.warn(`${tag} captions unavailable:`, e?.message ?? e));
+        await adapter.watchSpeakers((n, t, at) => (t.trim() ? side.caption(n, t, at) : side.speaker(n, at))).catch((e) => console.warn(`${tag} captions unavailable:`, e?.message ?? e));
         // Anyone typing `/milo highlight` marks the last 30 s. Handled one at a time, and a failure here never touches the recording.
         let queue: Promise<void> = Promise.resolve(), lastAck = 0;
         const rec0 = rec;

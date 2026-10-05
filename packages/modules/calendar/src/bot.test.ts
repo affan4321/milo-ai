@@ -35,10 +35,11 @@ await db.insert(calendarEvents).values([
   mk("almost-over", -28, 30, "https://meet.google.com/alm-ostt-ove"),
   mk("no-link", 1, 30, null, "unknown"),
   mk("zoom", 1, 30, "https://zoom.us/j/123456789", "zoom"),
+  mk("unsupported", 1, 30, "https://example.com/call", "webex"),
   mk("opted-out", 1, 30, "https://meet.google.com/opt-outt-out", "meet", false),
 ]);
 let jobs = await planBotJoins(db, now);
-check(jobs.length === 1 && jobs[0]!.url.includes("aaa-bbbb"), `only the meeting starting now gets a bot (got ${jobs.map((j) => j.url).join(", ")})`);
+check(jobs.length === 2 && jobs.some((j) => j.url.includes("aaa-bbbb")) && jobs.some((j) => j.platform === "zoom"), `only meetings starting now on supported platforms get a bot (Meet and Zoom) (got ${jobs.map((j) => j.url).join(", ")})`);
 check(jobs[0]!.displayName === "Milo AI Notetaker" && !!jobs[0]!.consentMessage, "job names the bot and carries the consent message");
 jobs = await planBotJoins(db, now); check(jobs.length === 0, "second run is a no-op (no duplicate bot)");
 
@@ -59,7 +60,7 @@ check((await planBotJoins(db, now)).length === 0, "same link already has a bot -
 
 // manual "Send Milo": validation
 const bad = await createBotSession(db, { ownerId: u!.id, meetingUrl: "https://example.com/nope" }); check("error" in bad, "non-meeting link rejected");
-const zoom = await createBotSession(db, { ownerId: u!.id, meetingUrl: "https://zoom.us/j/999" }); check("error" in zoom && /Zoom/.test(zoom.error), "unsupported platform explained");
+const zoom = await createBotSession(db, { ownerId: u!.id, meetingUrl: "https://zoom.us/j/999" }); check("job" in zoom && zoom.job.platform === "zoom", "Zoom link accepted");
 const teamsS = await createBotSession(db, { ownerId: u!.id, meetingUrl: "https://teams.microsoft.com/l/meetup-join/19%3ameeting_abc%40thread.v2/0" }); check("job" in teamsS && teamsS.job.platform === "teams", "Teams link accepted");
 const okS = await createBotSession(db, { ownerId: u!.id, meetingUrl: "  https://meet.google.com/abc-defg-hij?authuser=1 ", title: "Ad hoc" });
 check("job" in okS && okS.job.url === "https://meet.google.com/abc-defg-hij?authuser=1" && okS.job.platform === "meet", "manual link accepted and trimmed");

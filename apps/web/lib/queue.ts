@@ -5,7 +5,8 @@ const g = globalThis as unknown as { __boss?: Promise<PgBoss> };
 /** Send-only pg-boss client for the web process (the worker does the processing). */
 export function getBoss(): Promise<PgBoss> {
   g.__boss ??= (async () => {
-    const boss = new PgBoss({ connectionString: process.env.DATABASE_URL ?? "postgres://milo:milo@localhost:5433/milo", supervise: false, schedule: false, max: 2 });
+    const boss = new PgBoss({ // pg-boss needs a direct (non-pooled) connection: set DATABASE_URL_DIRECT when DATABASE_URL points at a pooler.
+    connectionString: process.env.DATABASE_URL_DIRECT ?? process.env.DATABASE_URL ?? "postgres://milo:milo@localhost:5433/milo", supervise: false, schedule: false, max: 2 });
     boss.on("error", (e) => console.error("[boss]", e));
     await boss.start();
     return boss;

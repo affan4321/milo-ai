@@ -16,6 +16,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ recordin
   if (!row || row.owner !== user.id || !row.key) return new Response("Not found", { status: 404 });
 
   const { storage } = getProviders();
+  // Remote storage: send the player straight to the bucket (it handles Range itself); nothing is streamed through this function.
+  if (storage.presignGet) return Response.redirect(await storage.presignGet(row.key, 3600), 302);
   const size = await storage.size(row.key);
   if (!size) return new Response("Not found", { status: 404 });
   const type = TYPES[row.key.split(".").pop()!] ?? "application/octet-stream";

@@ -57,13 +57,30 @@ export const api = {
       return (await res.json()) as { created: boolean };
     } catch (e) { console.warn(`[api] highlight not saved: ${e instanceof Error ? e.message : e}`); return null; }
   },
+  /** Ask the web app where files go: "direct" = a presigned bucket URL (hosted storage), "proxy" = send through the web app (local disk). */
+  async uploadTarget(id: string, kind: "recording" | "sidecar", ext = "mp4"): Promise<{ mode: "direct"; url: string; contentType: string } | { mode: "proxy" }> {
+    return withRetry("upload-url", async () => (await check(await fetch(url(id, "/upload-url"), { method: "POST", headers: { ...headers(), "content-type": "application/json" }, body: JSON.stringify({ kind, ext }), signal: AbortSignal.timeout(15_000) }))).json() as Promise<{ mode: "direct"; url: string; contentType: string } | { mode: "proxy" }>);
+  },
   async uploadSidecar(id: string, sidecar: Sidecar) {
-    await withRetry("sidecar", async () => { await check(await fetch(url(id, "/sidecar"), { method: "PUT", headers: { ...headers(), "content-type": "application/json" }, body: JSON.stringify(sidecar), signal: AbortSignal.timeout(60_000) })); });
+    const target = await api.uploadTarget(id, "sidecar");
+    const body = JSON.stringify(sidecar);
+    await withRetry("sidecar", async () => {
+      if (target.mode === "direct") await check(await fetch(target.url, { method: "PUT", headers: { "content-type": target.contentType }, body, signal: AbortSignal.timeout(60_000) }));
+      else await check(await fetch(url(id, "/sidecar"), { method: "PUT", headers: { ...headers(), "content-type": "application/json" }, body, signal: AbortSignal.timeout(60_000) }));
+    });
   },
   async uploadRecording(id: string, file: string, ext = "mp4") {
+    const target = await api.uploadTarget(id, "recording", ext);
     await withRetry("recording", async () => {
       // duplex:'half' lets fetch stream a request body from disk, so a 300 MB recording is never held in memory.
-      await check(await fetch(url(id, `/recording?ext=${ext}`), { method: "PUT", headers: { ...headers(), "content-type": "application/octet-stream" }, body: Readable.toWeb(fs.createReadStream(file)) as never, duplex: "half", signal: AbortSignal.timeout(30 * 60_000) } as RequestInit));
+      const stream = Readable.toWeb(fs.createReadStream(file)) as never;
+      if (target.mode === "direct") {
+        // Straight to the bucket; hosted storage needs the exact length up front (a chunked body is refused). Then tell the web app to start processing.
+        await check(await fetch(target.url, { method: "PUT", headers: { "content-type": target.contentType, "content-length": String(fs.statSync(file).size) }, body: stream, duplex: "half", signal: AbortSignal.timeout(30 * 60_000) } as RequestInit));
+        await check(await fetch(url(id, `/recording/complete?ext=${ext}`), { method: "POST", headers: headers(), signal: AbortSignal.timeout(30_000) }));
+      } else {
+        await check(await fetch(url(id, `/recording?ext=${ext}`), { method: "PUT", headers: { ...headers(), "content-type": "application/octet-stream" }, body: stream, duplex: "half", signal: AbortSignal.timeout(30 * 60_000) } as RequestInit));
+      }
     }, [5000, 20000, 60000]);
   },
 };

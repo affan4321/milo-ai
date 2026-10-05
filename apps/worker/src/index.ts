@@ -10,6 +10,7 @@ import { generateInsights } from "@milo/intelligence";
 import { renderClip } from "@milo/sharing";
 import { findUnindexedRecordings, indexRecording } from "@milo/indexing";
 import { evaluateAlertsForMeeting, sendRecap } from "@milo/notify";
+import { createEmbedServer } from "./embed-server";
 
 const boss = new PgBoss(process.env.DATABASE_URL ?? "postgres://milo:milo@localhost:5433/milo");
 boss.on("error", (e) => console.error("[boss]", e));
@@ -148,4 +149,9 @@ await boss.work("bot.tick", async () => {
   const reaped = await reapStaleBotSessions(db);
   if (reaped) console.warn(`[bot] marked ${reaped} silent session(s) as failed`);
 });
+// Web app on serverless hosting (Vercel) can't run the embedding model, so it asks this machine. Off unless EMBED_TOKEN is set.
+if (process.env.EMBED_TOKEN) {
+  const port = Number(process.env.EMBED_PORT) || 8788;
+  createEmbedServer((t, k) => providers.llm.embed(t, k), process.env.EMBED_TOKEN).listen(port, () => console.log(`embedding service on :${port}`));
+}
 console.log("worker up");

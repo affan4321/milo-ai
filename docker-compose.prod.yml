@@ -1,10 +1,10 @@
 # Single-VM deployment. See docs/DEPLOY.md.
-#   cp .env.production.example .env.production   # fill it in
-#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+#   fill in .env (see the VM section of .env.example)
+#   docker compose -f docker-compose.prod.yml --env-file .env up -d --build
 x-app: &app
   image: milo-ai-app:latest
   build: { context: ., dockerfile: Dockerfile }
-  env_file: .env.production
+  env_file: .env
   environment:
     DATABASE_URL: postgres://milo:${POSTGRES_PASSWORD}@postgres:5432/milo
     STORAGE_PROVIDER: local

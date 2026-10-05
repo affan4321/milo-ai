@@ -2,8 +2,8 @@ import { and, eq, gte, inArray, lt, lte, gt, ne, or, sql } from "drizzle-orm";
 import { BOT_ACTIVE_STATES, BOT_NAME, CONSENT_MESSAGE, MAX_QUEUE_WAIT_MS, WORKER_ALIVE_MS, detectMeeting, type BotJob } from "@milo/core";
 import { ensureWorkspace, botSessions, botWorkers, calendarConnections, calendarEvents, meetings, preferences, users, type Db } from "@milo/db";
 
-/** Platforms the bot has a join script for. Zoom is added as their adapters land. */
-export const SUPPORTED_PLATFORMS = ["meet", "teams"] as const;
+/** Platforms the bot has a join script for. Zoom joins through its web client as their adapters land. */
+export const SUPPORTED_PLATFORMS = ["meet", "teams", "zoom"] as const;
 const JOIN_LEAD_MS = 90_000;      // ask to join a minute and a half before the start
 const MIN_REMAINING_MS = 3 * 60_000; // don't bother joining something that is about to end
 
@@ -25,7 +25,7 @@ export async function createBotSession(db: Db, a: {
 }): Promise<{ job: BotJob } | { error: string }> {
   const link = detectMeeting(a.meetingUrl);
   if (!link) return { error: "That doesn't look like a Google Meet, Zoom or Teams link." };
-  if (!(SUPPORTED_PLATFORMS as readonly string[]).includes(link.platform)) return { error: `Milo can't join Zoom calls yet. Google Meet and Microsoft Teams work today.` };
+  if (!(SUPPORTED_PLATFORMS as readonly string[]).includes(link.platform)) return { error: `Milo can't join ${link.platform} calls yet.` };
   const [prefs] = await db.select().from(preferences).where(eq(preferences.userId, a.ownerId));
   const [meeting] = await db.insert(meetings).values({
     ownerId: a.ownerId, workspaceId: await ensureWorkspace(db, a.ownerId), visibility: prefs?.defaultVisibility === "team" ? "team" : "private", calendarEventId: a.calendarEventId ?? null, title: a.title?.trim() || "Meeting", status: "scheduled", captureSource: "bot", startedAt: a.startedAt ?? new Date(),
