@@ -8,6 +8,8 @@ import { getDb, botSessions, meetings, recordings, speakers, transcriptSegments,
 import { BUILT_IN_TEMPLATES, DEFAULT_TEMPLATE } from "@milo/intelligence";
 import { getCurrentUser } from "@/lib/session";
 import { MeetingView } from "./meeting-view";
+import { LivePanel } from "./live-panel";
+import { listClips, listHighlights } from "@milo/sharing";
 import { AutoRefresh } from "./auto-refresh";
 import { retryStageAction } from "./actions";
 
@@ -36,7 +38,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
   const [spk, segs] = transcriptReady
     ? await Promise.all([
         db.select().from(speakers).where(eq(speakers.meetingId, id)),
-        db.select({ id: transcriptSegments.id, speakerId: transcriptSegments.speakerId, startMs: transcriptSegments.startMs, text: transcriptSegments.text })
+        db.select({ id: transcriptSegments.id, speakerId: transcriptSegments.speakerId, startMs: transcriptSegments.startMs, endMs: transcriptSegments.endMs, text: transcriptSegments.text })
           .from(transcriptSegments).where(eq(transcriptSegments.meetingId, id)).orderBy(asc(transcriptSegments.startMs)),
       ])
     : [[], []];
@@ -52,6 +54,15 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
     : [[], [], [], []];
   const templateOpts = [...BUILT_IN_TEMPLATES.map((t) => ({ key: t.key, name: t.name })), ...custom.map((t) => ({ key: t.key, name: t.name }))];
 
+  const hls = await listHighlights(db, id);
+  const clipRows = transcriptReady ? await listClips(db, id) : [];
+  const clipViews = clipRows.map((c) => ({
+    id: c.id, startMs: c.startMs, endMs: c.endMs, title: c.title, status: c.status, error: c.error,
+    token: c.share && !c.share.revokedAt && (!c.share.expiresAt || c.share.expiresAt > new Date()) ? c.share.token : null, views: c.share?.views ?? 0,
+  }));
+  const clipsBusy = clipRows.some((c) => c.status === "pending");
+  const hlViews = hls.map((h) => ({ id: h.id, startMs: h.startMs, endMs: h.endMs, note: h.note, source: h.source, createdBy: h.createdBy }));
+
   const failedCard = (s: typeof media, title: string) => s && (
     <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm">
       <div className="font-medium">{title} failed</div>
@@ -64,7 +75,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="space-y-6">
-      {(busy || botActive || awaitingHandOver) && <AutoRefresh ms={botActive || awaitingHandOver ? 3000 : 2000} />}
+      {(busy || botActive || awaitingHandOver || clipsBusy) && <AutoRefresh ms={botActive || awaitingHandOver ? 3000 : 2000} />}
       <div>
         <Link href="/home" className="text-sm text-muted hover:text-text">← Home</Link>
         <h1 className="mt-1 text-2xl font-semibold">{meeting.title}</h1>
@@ -90,6 +101,10 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
         </div>
       )}
 
+      {bot && !rec && bot.state === "recording" && (
+        <LivePanel meetingId={id} startedAtMs={bot.recordingStartedAt ? +bot.recordingStartedAt : null} participants={bot.participantCount} highlights={hlViews} />
+      )}
+
       {media?.status === "failed" && failedCard(media, STAGE_LABEL.media!)}
       {media && media.status !== "done" && media.status !== "failed" && (
         <div className="rounded-lg border border-border bg-surface p-6 text-sm text-muted">{STAGE_LABEL.media}… the player appears as soon as this finishes.</div>
@@ -102,6 +117,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
           chapters={chs.map((c) => ({ id: c.id, title: c.title, startMs: c.startMs }))}
           actionItems={items.map((a) => ({ id: a.id, text: a.text, assignee: a.assignee, done: a.done, sourceMs: a.sourceMs })).sort((a, b) => (a.sourceMs ?? 0) - (b.sourceMs ?? 0))}
           templates={templateOpts} summaries={Object.fromEntries(sums.map((x) => [x.templateKey, x.content]))}
+          highlights={hlViews} clips={clipViews} durationMs={rec!.durationMs ?? 0}
           defaultTemplate={prefs?.defaultTemplate ?? DEFAULT_TEMPLATE} insights={ins ? { status: ins.status, error: ins.error } : null} />
       )}
 

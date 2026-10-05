@@ -16,8 +16,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 /** The bot reports its state here; repeating a state is a heartbeat. */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!botAuthorized(req)) return unauthorized();
-  const body = await req.json().catch(() => null) as { state?: string; reason?: string } | null;
+  const body = await req.json().catch(() => null) as { state?: string; reason?: string; recordingStartedAtMs?: number; participants?: number } | null;
   if (!body || !(STATES as readonly string[]).includes(body.state ?? "")) return Response.json({ error: "bad state" }, { status: 400 });
-  const r = await applyBotState(getDb(), (await params).id, { state: body.state as (typeof STATES)[number], reason: body.reason });
+  const r = await applyBotState(getDb(), (await params).id, { state: body.state as (typeof STATES)[number], reason: body.reason, recordingStartedAtMs: body.recordingStartedAtMs, participants: body.participants });
   return r.ok ? Response.json(r) : Response.json(r, { status: 404 });
 }

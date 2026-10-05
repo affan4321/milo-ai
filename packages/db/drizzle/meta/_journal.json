@@ -36,6 +36,20 @@
       "when": 1791147087236,
       "tag": "0004_groovy_firedrake",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791157308038,
+      "tag": "0005_slow_pepper_potts",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791157975577,
+      "tag": "0006_mute_night_thrasher",
+      "breakpoints": true
     }
   ]
 }

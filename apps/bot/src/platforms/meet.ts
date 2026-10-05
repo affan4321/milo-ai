@@ -131,7 +131,9 @@ export class MeetAdapter implements PlatformAdapter {
    * Post the message and confirm it appears. The page can re-render between typing and sending (the box gets replaced and the
    * Enter lands nowhere), so confirm and retry rather than trusting a single attempt.
    */
-  async postConsent(message: string): Promise<boolean> {
+  postConsent(message: string) { return this.sendChat(message); }
+
+  async sendChat(message: string): Promise<boolean> {
     const probe = message.slice(0, 40);
     for (let attempt = 1; attempt <= 6; attempt++) {
       try {

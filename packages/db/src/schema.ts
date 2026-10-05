@@ -63,6 +63,9 @@ export const botSessions = pgTable("bot_sessions", {
   state: text("state").notNull().default("scheduled"), reason: text("reason"),
   startedAt: timestamp("started_at", { withTimezone: true }),
   meetingUrl: text("meeting_url").notNull().default(""), platform: text("platform").notNull().default("unknown"),
+  /** Wall-clock instant of recording time 0, reported by the bot; turns "now" into the recording's clock for live highlights. */
+  recordingStartedAt: timestamp("recording_started_at", { withTimezone: true }),
+  participantCount: integer("participant_count"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -124,6 +127,8 @@ export const highlights = pgTable("highlights", {
 export const clips = pgTable("clips", {
   id: id(), meetingId: ref("meeting_id").references(() => meetings.id, { onDelete: "cascade" }),
   startMs: integer("start_ms").notNull(), endMs: integer("end_ms").notNull(), title: text("title"), storageKey: text("storage_key"),
+  status: text("status").notNull().default("pending"), // pending | ready | failed
+  error: text("error"), createdBy: text("created_by"), createdAt: createdAt(),
 });
 export const shares = pgTable("shares", {
   id: id(), token: text("token").notNull().unique(), targetType: text("target_type").notNull(), targetId: ref("target_id"),

@@ -11,6 +11,8 @@ export interface PlatformAdapter {
   join(url: string, displayName: string, hooks: { onWaiting(): void }): Promise<JoinResult>;
   /** Returns false when the platform won't take the message (chat disabled by the host). Never throws. */
   postConsent(message: string): Promise<boolean>;
+  /** Any later chat message (e.g. confirming a highlight). Same contract as postConsent. */
+  sendChat(message: string): Promise<boolean>;
   watchSpeakers(cb: (name: string, text: string, epochMs: number) => void): Promise<void>;
   watchChat(cb: (from: string, text: string, epochMs: number) => void): Promise<void>;
   watchParticipants(cb: (names: string[], epochMs: number) => void): Promise<void>;

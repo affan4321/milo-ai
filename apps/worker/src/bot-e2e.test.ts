@@ -6,7 +6,8 @@ import { execFileSync } from "node:child_process";
 import { eq } from "drizzle-orm";
 import PgBoss from "pg-boss";
 import { BOT_JOIN_QUEUE, BOT_QUEUE_OPTIONS, CONSENT_MESSAGE, type BotJob } from "@milo/core";
-import { getDb, users, preferences, meetings, botSessions, recordings, speakers, participants, transcriptSegments } from "@milo/db";
+import { getDb, users, preferences, meetings, botSessions, recordings, speakers, participants, transcriptSegments, highlights } from "@milo/db";
+import { addLiveHighlight } from "@milo/sharing";
 import { LocalStorage } from "@milo/providers";
 
 const MOCK = "http://localhost:8801", MOCK_FROM_BOT = "http://host.docker.internal:8801";
@@ -115,6 +116,32 @@ try {
   await until("bot leaves on its own", async () => (await F.session()).state === "left", 60_000);
   const aloneSecs = (Date.now() - goneAt) / 1000;
   check(aloneSecs < 30, `bot left ${aloneSecs.toFixed(1)}s after the last person left (grace 15s + a few seconds)`);
+
+  // ---------------- G. highlights: chat command and live button ----------------
+  console.log("G. highlights from the meeting chat and from the live button");
+  await control("e2e-hl", { do: "reset" }); await control("e2e-hl", { do: "mode", mode: "nowait" }); await control("e2e-hl", { do: "others", count: 2 });
+  const G = await start("e2e-hl", "nowait"); await control("e2e-hl", { do: "others", count: 2 });
+  await until("recording with clock", async () => { const x = await G.session(); return x.state === "recording" && !!x.recordingStartedAt; });
+  const clock = +(await G.session()).recordingStartedAt!;
+  await sleep(15_000);
+  const cmdAt = Date.now() - clock;
+  await control("e2e-hl", { do: "chat", from: "Ada", text: "/milo highlight budget concern" });
+  const hl1 = await until("chat highlight saved", async () => (await db.select().from(highlights).where(eq(highlights.meetingId, G.m.id)))[0], 30_000);
+  check(hl1.source === "chat_command" && hl1.note === "budget concern" && hl1.createdBy === "Ada", `chat command saved with note and sender (${hl1.source}, '${hl1.note}', ${hl1.createdBy})`);
+  check(Math.abs(hl1.endMs - cmdAt) < 4000 && hl1.startMs === Math.max(0, hl1.endMs - 30_000), `highlight lands on the recording clock: ends ${hl1.endMs}ms, expected about ${cmdAt}ms, covers 30 s`);
+  await until("bot confirmed in chat", async () => (await room("e2e-hl")).messages.some((x: any) => x.from === "Milo AI Notetaker" && /Highlight saved/.test(x.text)), 20_000);
+  check(true, "bot confirmed the highlight in the meeting chat");
+  await sleep(1500);
+  check((await db.select().from(highlights).where(eq(highlights.meetingId, G.m.id))).length === 1, "the bot's own confirmation did not create another highlight");
+  await sleep(8_000);
+  const live = await addLiveHighlight(db, G.m.id, { createdBy: "owner" });
+  check("highlight" in live && live.created && live.highlight.source === "live_button" && Math.abs(live.highlight.endMs - (Date.now() - clock)) < 3000, "live Highlight button saves the last 30 s of the running recording");
+  check((await G.session()).participantCount === 3, `participant count reported to the app (${(await G.session()).participantCount})`);
+  await control("e2e-hl", { do: "end" });
+  await until("left", async () => (await G.session()).state === "left", 60_000);
+  check((await addLiveHighlight(db, G.m.id, {}) as any).error !== undefined, "after the bot leaves, the live button refuses");
+  await until("processed", async () => (await G.meeting()).status === "ready", 180_000, 2000);
+  check((await db.select().from(highlights).where(eq(highlights.meetingId, G.m.id))).length === 2, "both highlights kept after processing");
 
   // ---------------- C. refusals ----------------
   for (const [code, mode, reason] of [["e2e-denied", "denied", "denied"], ["e2e-blocked", "blocked", "guests_blocked"], ["e2e-captcha", "captcha", "captcha"]] as const) {

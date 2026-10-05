@@ -68,7 +68,11 @@ export async function planBotJoins(db: Db, now = new Date()): Promise<BotJob[]> 
 
 const ORDER = ["scheduled", "joining", "waiting_room", "recording"] as const;
 const TERMINAL = ["left", "failed"];
-export type BotStateUpdate = { state: "joining" | "waiting_room" | "recording" | "left" | "failed"; reason?: string };
+export type BotStateUpdate = {
+  state: "joining" | "waiting_room" | "recording" | "left" | "failed"; reason?: string;
+  /** Epoch ms of recording time 0 (sent with "recording") and the current participant count (sent with any heartbeat). */
+  recordingStartedAtMs?: number; participants?: number;
+};
 
 /**
  * Apply a state report from the bot. Repeating the current state is a heartbeat (bumps updatedAt). States never move backwards and
@@ -83,6 +87,8 @@ export async function applyBotState(db: Db, sessionId: string, u: BotStateUpdate
   await db.update(botSessions).set({
     state: u.state, reason: u.state === "failed" ? u.reason ?? "join_error" : null, updatedAt: now,
     ...(u.state === "recording" && s.state !== "recording" ? { startedAt: now } : {}),
+    ...(u.state === "recording" && u.recordingStartedAtMs && Number.isFinite(u.recordingStartedAtMs) ? { recordingStartedAt: new Date(u.recordingStartedAtMs) } : {}),
+    ...(typeof u.participants === "number" && u.participants >= 0 && u.participants < 10_000 ? { participantCount: Math.round(u.participants) } : {}),
   }).where(eq(botSessions.id, sessionId));
   if (u.state === "recording") await db.update(meetings).set({ status: "recording" }).where(eq(meetings.id, s.meetingId));
   if (u.state === "failed") await db.update(meetings).set({ status: "failed" }).where(and(eq(meetings.id, s.meetingId), inArray(meetings.status, ["scheduled", "recording"])));

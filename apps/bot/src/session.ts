@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { BotFailReason, BotJob } from "@milo/core";
+import { isBotName, parseHighlightCommand, CONSENT_MESSAGE, type BotFailReason, type BotJob } from "@milo/core";
 import { api as realApi, HttpError } from "./api";
 import { config } from "./config";
 import { MeetAdapter } from "./platforms/meet";
@@ -11,7 +11,7 @@ import { SidecarCollector } from "./sidecar";
 export interface Deps {
   makeAdapter(platform: string): PlatformAdapter;
   record(file: string): Promise<Recording>;
-  api: Pick<typeof realApi, "getState" | "report" | "uploadSidecar" | "uploadRecording">;
+  api: Pick<typeof realApi, "getState" | "report" | "uploadSidecar" | "uploadRecording" | "highlight">;
   cfg: Pick<typeof config, "dataDir" | "heartbeatMs" | "aloneGraceMs" | "aloneAtStartMs" | "maxMeetingMs">;
 }
 export const defaultDeps: Deps = {
@@ -36,7 +36,9 @@ export async function runSession(job: BotJob, d: Deps = defaultDeps): Promise<Ou
   fs.mkdirSync(dir, { recursive: true });
   let current: "joining" | "waiting_room" | "recording" = "joining";
   await d.api.report(id, "joining");
-  const beat = setInterval(() => void d.api.report(id, current), d.cfg.heartbeatMs); // the web app fails sessions whose bot goes silent
+  let people: number | undefined;
+  // Heartbeat: the web app fails sessions whose bot goes silent. It also carries the participant count for the live page.
+  const beat = setInterval(() => void d.api.report(id, current, undefined, people === undefined ? undefined : { participants: people }), d.cfg.heartbeatMs);
 
   const adapter = d.makeAdapter(job.platform);
   const side = new SidecarCollector(job.platform);
@@ -48,15 +50,26 @@ export async function runSession(job: BotJob, d: Deps = defaultDeps): Promise<Ou
       try { rec = await d.record(path.join(dir, "recording.mp4")); }
       catch (e) { console.error(`${tag} recorder failed to start:`, e instanceof Error ? e.message : e); failure = "recording_error"; }
       if (rec) {
-        side.start(rec.startedAtMs); current = "recording"; await d.api.report(id, "recording");
+        side.start(rec.startedAtMs); current = "recording"; await d.api.report(id, "recording", undefined, { recordingStartedAtMs: rec.startedAtMs });
         // Consent first (people should see it as early as possible), then the watchers. All of it is best-effort:
         // losing captions or chat must never cost us the recording.
         if (job.consentMessage && !(await adapter.postConsent(job.consentMessage).catch(() => false))) console.warn(`${tag} could not post the consent message (chat disabled?)`);
         await adapter.watchSpeakers((n, t, at) => side.caption(n, t, at)).catch((e) => console.warn(`${tag} captions unavailable:`, e?.message ?? e));
-        await adapter.watchChat((f, t, at) => side.chat(f, t, at)).catch((e) => console.warn(`${tag} chat unavailable:`, e?.message ?? e));
+        // Anyone typing `/milo highlight` marks the last 30 s. Handled one at a time, and a failure here never touches the recording.
+        let queue: Promise<void> = Promise.resolve(), lastAck = 0;
+        const rec0 = rec;
+        await adapter.watchChat((from, text, at) => {
+          side.chat(from, text, at);
+          const cmd = parseHighlightCommand(text);
+          if (!cmd || isBotName(from) || text.includes(CONSENT_MESSAGE.slice(0, 40))) return;
+          queue = queue.then(async () => {
+            const saved = await d.api.highlight(id, { atMs: Math.max(0, at - rec0.startedAtMs), by: from, note: cmd.note });
+            if (saved?.created && Date.now() - lastAck > 3000) { lastAck = Date.now(); await adapter.sendChat("Highlight saved: the last 30 seconds are marked.").catch(() => false); }
+          }).catch(() => {});
+        }).catch((e) => console.warn(`${tag} chat unavailable:`, e?.message ?? e));
         await adapter.watchParticipants((ns, at) => side.participants(ns, at)).catch(() => {});
         endedBy = await Promise.race([
-          adapter.detectEnd({ aloneGraceMs: d.cfg.aloneGraceMs, aloneAtStartMs: d.cfg.aloneAtStartMs, maxMs: d.cfg.maxMeetingMs, onCount: (n, at) => side.count(n, at) }),
+          adapter.detectEnd({ aloneGraceMs: d.cfg.aloneGraceMs, aloneAtStartMs: d.cfg.aloneAtStartMs, maxMs: d.cfg.maxMeetingMs, onCount: (n, at) => { people = n; side.count(n, at); } }),
           rec.died.then(() => "error" as const),
         ]);
         if (endedBy === "error") failure = "recording_error";

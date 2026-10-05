@@ -16,6 +16,7 @@
     "drizzle-orm": "^0.36.0",
     "@milo/media": "workspace:*",
     "@milo/transcription": "workspace:*",
-    "@milo/intelligence": "workspace:*"
+    "@milo/intelligence": "workspace:*",
+    "@milo/sharing": "workspace:*"
   }
 }

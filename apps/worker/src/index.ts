@@ -6,6 +6,7 @@ import { planBotJoins, reapStaleBotSessions, syncConnection } from "@milo/calend
 import { processMedia } from "@milo/media";
 import { transcribeRecording } from "@milo/transcription";
 import { generateInsights } from "@milo/intelligence";
+import { renderClip } from "@milo/sharing";
 
 const boss = new PgBoss(process.env.DATABASE_URL ?? "postgres://milo:milo@localhost:5433/milo");
 boss.on("error", (e) => console.error("[boss]", e));
@@ -68,6 +69,15 @@ await boss.work<RecordingJob>(Events.TranscriptReady, { batchSize: 1, pollingInt
 });
 await queue(Events.InsightsReady);
 await boss.work(Events.InsightsReady, async (jobs) => { for (const j of jobs) console.log(`[worker] ${Events.InsightsReady} (no consumer yet)`, j.id); });
+
+// clips: cut the requested range out of the playable recording.
+await boss.createQueue("clip.create", { name: "clip.create", retryLimit: 2, retryBackoff: true, retryDelay: 10, expireInSeconds: 1800 } as never);
+await boss.work<{ clipId: string }>("clip.create", async (jobs) => {
+  for (const j of jobs) {
+    try { await renderClip(db, providers.storage, j.data.clipId); console.log(`[clip] ${j.data.clipId} ready`); }
+    catch (e) { if (isPermanent(e)) { console.warn(`[clip] ${j.data.clipId} failed permanently: ${e.message}`); continue; } throw e; }
+  }
+});
 
 // calendar: a tick fans out one job per connection.
 await queue("calendar.sync");

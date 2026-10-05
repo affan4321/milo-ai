@@ -24,3 +24,14 @@ export function detectMeeting(text: string): { platform: "meet" | "zoom" | "team
   }
   return null;
 }
+
+/**
+ * `/milo highlight` typed in a meeting's chat by anyone. Anything after the command is kept as a note
+ * ("/milo highlight pricing objection"). Returns null when the message isn't the command.
+ */
+export function parseHighlightCommand(text: string): { note: string | null } | null {
+  const m = /(?:^|\s)\/milo\s+highlight\b[:\s-]*(.*)$/is.exec(text.trim());
+  if (!m) return null;
+  const note = m[1]!.trim().replace(/\s+/g, " ").slice(0, 200);
+  return { note: note || null };
+}

@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { BotJob, Sidecar } from "@milo/core";
+import { CONSENT_MESSAGE, type BotJob, type Sidecar } from "@milo/core";
 import { runSession, retryPending, type Deps } from "./session";
 import { HttpError } from "./api";
 import type { EndReason, JoinResult, PlatformAdapter } from "./platforms/types";
@@ -10,9 +10,11 @@ import { SidecarCollector } from "./sidecar";
 
 let fails = 0;
 const check = (c: unknown, m: string) => { if (!c) { fails++; console.error("FAIL:", m); } };
+const CONSENT_PROBE = CONSENT_MESSAGE;
 const job: BotJob = { botSessionId: "11111111-2222-3333-4444-555555555555", meetingId: "m1", url: "https://meet.google.com/x", platform: "meet", displayName: "Milo AI Notetaker", consentMessage: "hello, recording" };
 
 interface Scenario {
+  chatMessages?: { from: string; text: string }[]; highlightFails?: boolean;
   state?: string; join?: JoinResult | "throw"; waiting?: boolean; consentOk?: boolean; end?: EndReason | (() => Promise<EndReason>); recStart?: "ok" | "fail";
   recAgeMs?: number; recBytes?: number; uploadFails?: number; watchThrows?: boolean; died?: boolean; hb?: number;
 }
@@ -20,13 +22,16 @@ function harness(s: Scenario) {
   const calls: string[] = [];
   const reports: string[] = [];
   const uploads: { sidecar?: Sidecar; recording?: string; order: string[] } = { order: [] };
+  const highlights: { atMs: number; by: string; note: string | null }[] = [];
+  const recordingReports: any[] = [];
   let uploadAttempts = 0;
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "bot-test-"));
   const adapter: PlatformAdapter = {
     async join(_u, name, hooks) { calls.push(`join:${name}`); if (s.waiting) hooks.onWaiting(); if (s.join === "throw") throw new Error("boom"); return s.join ?? { admitted: true }; },
     async postConsent(m) { calls.push(`consent:${m}`); return s.consentOk ?? true; },
+    async sendChat(m) { calls.push(`chat:${m}`); return true; },
     async watchSpeakers(cb) { if (s.watchThrows) throw new Error("no captions"); cb("Ada", "hello everyone", Date.now()); },
-    async watchChat(cb) { if (s.watchThrows) throw new Error("no chat"); cb("Bob", "hi", Date.now()); },
+    async watchChat(cb) { if (s.watchThrows) throw new Error("no chat"); cb("Bob", "hi", Date.now()); for (const m of s.chatMessages ?? []) cb(m.from, m.text, Date.now()); },
     async watchParticipants(cb) { cb(["Ada", "Bob"], Date.now()); },
     async detectEnd() { calls.push("detectEnd"); return typeof s.end === "function" ? s.end() : s.end ?? "ended"; },
     async leave() { calls.push("leave"); }, async close() { calls.push("close"); },
@@ -41,13 +46,14 @@ function harness(s: Scenario) {
     },
     api: {
       async getState() { return { state: s.state ?? "scheduled" }; },
-      async report(_id, st, reason) { reports.push(reason ? `${st}:${reason}` : st); },
+      async report(_id, st, reason, extra) { reports.push(reason ? `${st}:${reason}` : st); if (extra) recordingReports.push({ st, ...extra }); },
+      async highlight(_id, h) { highlights.push(h); return s.highlightFails ? null : { created: true }; },
       async uploadSidecar(_id, sc) { uploads.sidecar = sc; uploads.order.push("sidecar"); },
       async uploadRecording(_id, file) { if (++uploadAttempts <= (s.uploadFails ?? 0)) throw new Error("web down"); uploads.recording = file; uploads.order.push("recording"); },
     },
     cfg: { dataDir: dir, heartbeatMs: s.hb ?? 60_000, aloneGraceMs: 1, aloneAtStartMs: 1, maxMeetingMs: 1e9 },
   };
-  return { deps, calls, reports, uploads, dir, sessionDir: path.join(dir, "sessions", job.botSessionId) };
+  return { deps, calls, reports, uploads, highlights, recordingReports, dir, sessionDir: path.join(dir, "sessions", job.botSessionId) };
 }
 
 // 1. happy path (and waiting room is reported)
@@ -107,6 +113,18 @@ h = harness({});
 fs.mkdirSync(h.sessionDir, { recursive: true }); fs.writeFileSync(path.join(h.sessionDir, "sidecar.json"), "{}"); fs.writeFileSync(path.join(h.sessionDir, "recording.mp4"), "x");
 h.deps.api.uploadSidecar = async () => { throw new HttpError(404, "HTTP 404 not found"); };
 check(await retryPending(h.deps) === 0 && !fs.existsSync(h.sessionDir), "404 on hand-over discards the orphaned recording");
+
+// 10c. /milo highlight in the meeting chat: saved on the recording clock, confirmed in chat; other messages and the bot's own text ignored
+h = harness({ recAgeMs: 60_000, chatMessages: [
+  { from: "Ada", text: "/milo highlight pricing objection" }, { from: "Cy", text: "let's move on" }, { from: "Milo AI Notetaker", text: "/milo highlight from the bot itself" },
+  { from: "Unknown", text: CONSENT_PROBE }, { from: "Bob", text: "/milo highlight" } ] });
+check(await runSession(job, h.deps) === "recorded", "session with chat commands completes");
+check(h.highlights.length === 2 && h.highlights[0]!.by === "Ada" && h.highlights[0]!.note === "pricing objection" && h.highlights[1]!.by === "Bob" && h.highlights[1]!.note === null, `two real commands forwarded, bot's own and consent text ignored (got ${JSON.stringify(h.highlights.map((x) => x.by))})`);
+check(h.highlights[0]!.atMs >= 59_000 && h.highlights[0]!.atMs <= 62_000, `highlight time is on the recording clock (${h.highlights[0]?.atMs}ms for a 60s-old recording)`);
+check(h.calls.filter((c) => c.startsWith("chat:Highlight saved")).length === 1, "confirmation posted once (not spammed for back-to-back commands)");
+check(h.recordingReports.some((r) => r.st === "recording" && typeof r.recordingStartedAtMs === "number"), "the recording clock is reported with the recording state");
+h = harness({ chatMessages: [{ from: "Ada", text: "/milo highlight" }], highlightFails: true });
+check(await runSession(job, h.deps) === "recorded" && !h.calls.some((c) => c.startsWith("chat:Highlight")), "if the web app can't save the highlight, the recording is unaffected and no false confirmation is posted");
 
 // 11. heartbeat: same state repeated while waiting for the call to end
 h = harness({ hb: 40, end: () => new Promise((r) => setTimeout(() => r("ended"), 200)) });

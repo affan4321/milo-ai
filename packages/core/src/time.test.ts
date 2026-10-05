@@ -1,0 +1,15 @@
+import { parseHighlightCommand, highlightRange, formatMs, detectMeeting } from "./time";
+let fails = 0;
+const check = (c: unknown, m: string) => { if (!c) { fails++; console.error("FAIL:", m); } };
+check(JSON.stringify(parseHighlightCommand("/milo highlight")) === '{"note":null}', "bare command");
+check(parseHighlightCommand("  /MILO   Highlight  ")?.note === null, "case and spacing tolerant");
+check(parseHighlightCommand("/milo highlight pricing objection")?.note === "pricing objection", "note after the command is kept");
+check(parseHighlightCommand("/milo highlight: great point")?.note === "great point", "colon separator");
+check(parseHighlightCommand("hey team /milo highlight")?.note === null, "command in the middle of a message");
+check(parseHighlightCommand("Ada /milo highlight") !== null, "sender name text before it doesn't matter");
+check(parseHighlightCommand("please highlight this") === null && parseHighlightCommand("/milo help") === null && parseHighlightCommand("/milohighlight") === null, "other messages ignored");
+check(parseHighlightCommand("/milo highlight " + "x".repeat(500))!.note!.length === 200, "note is capped");
+check(JSON.stringify(highlightRange(100_000)) === '{"startMs":70000,"endMs":100000}' && highlightRange(10_000).startMs === 0, "30 s lookback, clamped at 0");
+check(formatMs(3_723_000) === "1:02:03" && formatMs(65_000) === "1:05", "formatMs");
+check(detectMeeting("join https://meet.google.com/abc-defg-hij now")?.platform === "meet", "detectMeeting still works");
+console.log(fails ? `${fails} FAILED` : "ok"); process.exit(fails ? 1 : 0);

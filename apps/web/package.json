@@ -18,7 +18,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "pg-boss": "^10.1.0",
-    "@milo/intelligence": "workspace:*"
+    "@milo/intelligence": "workspace:*",
+    "@milo/sharing": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",
