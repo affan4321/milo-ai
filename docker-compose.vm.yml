@@ -1,0 +1,55 @@
+# Everything that must keep running without a terminal open (on a server, or on your own Mac with Docker Desktop): that must keep running when your laptop is off: the worker (processing, scheduling, search
+# embeddings), the meeting bots, and the tunnel that lets the Vercel site reach the embedding service. The website (Vercel),
+# database (Neon) and recordings (R2) are hosted. See docs/DEPLOY.md.
+#   docker compose -f docker-compose.vm.yml up -d --build
+# Reads .env (same file as local development): DATABASE_URL, S3_*, STORAGE_PROVIDER=s3, APP_URL, BOT_TOKEN, EMBED_TOKEN,
+# GEMINI_*, GOOGLE_*, NGROK_AUTHTOKEN, NGROK_DOMAIN.
+x-app: &app
+  image: milo-ai-app:latest
+  build: { context: ., dockerfile: Dockerfile }
+  env_file: .env
+  environment: { MODEL_CACHE_DIR: /data/models, OUTBOX_DIR: /data/outbox }
+  volumes: ["appdata:/data"]
+  restart: unless-stopped
+
+services:
+  worker:
+    <<: *app
+    command: ["pnpm", "--filter", "@milo/worker", "exec", "tsx", "src/index.ts"]
+    ports: ["127.0.0.1:8788:8788"]   # localhost only; lets a tunnel started by hand keep working while you switch over
+    healthcheck: { test: ["CMD", "curl", "-fsS", "http://localhost:8788/health"], interval: 30s, timeout: 5s, retries: 5, start_period: 60s }
+
+  # Public address for the embedding service (port 8788), so the Vercel site can use it. The token is the access control.
+  tunnel:
+    image: ngrok/ngrok:latest
+    command: ["http", "--url=${NGROK_DOMAIN}", "worker:8788"]
+    environment: { NGROK_AUTHTOKEN: "${NGROK_AUTHTOKEN}" }
+    depends_on: [worker]
+    restart: unless-stopped
+
+  # Meeting bots: one meeting each. Sign in the bot's Google account once on this machine (docs/bot.md), then scale with --scale bot=3.
+  bot:
+    image: milo-ai-bot:latest
+    build: { context: ., dockerfile: apps/bot/Dockerfile }
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      WEB_URL: ${APP_URL}
+      BOT_TOKEN: ${BOT_TOKEN}
+      BOT_VNC_PASSWORD: ${BOT_VNC_PASSWORD:-}
+    shm_size: 1gb
+    volumes: ["botprofile:/profile:ro", "botdata:/data"]
+    restart: unless-stopped
+
+  bot-login:
+    image: milo-ai-bot:latest
+    profiles: ["login"]
+    command: ["login"]
+    environment: { BOT_VNC_PASSWORD: "${BOT_VNC_PASSWORD}" }
+    shm_size: 1gb
+    ports: ["127.0.0.1:5900:5900"]
+    volumes: ["botprofile:/profile"]
+
+volumes:
+  appdata:
+  botprofile:
+  botdata:

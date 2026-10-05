@@ -18,7 +18,8 @@ export class RemoteEmbeddings {
     let res: Response;
     try {
       res = await (this.o.fetch ?? fetch)(`${this.o.url.replace(/\/$/, "")}/embed`, {
-        method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${this.o.token}` },
+        method: "POST", // ngrok-skip-browser-warning: ngrok's free plan otherwise answers with an HTML warning page; harmless elsewhere.
+        headers: { "content-type": "application/json", authorization: `Bearer ${this.o.token}`, "ngrok-skip-browser-warning": "1" },
         body: JSON.stringify({ texts, task }), signal: AbortSignal.timeout(20_000),
       });
     } catch (e) { throw new Error(`The embedding service is unreachable (${e instanceof Error ? e.message : e}).`); }

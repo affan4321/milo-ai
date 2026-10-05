@@ -1,5 +1,7 @@
 # Milo.ai — architecture brief
 
+> Written before the build and updated as decisions changed. For the current overview and how to run it, start at the root `README.md`. Sections marked **(as built)** describe what exists now.
+
 ## Context
 
 Milo.ai is a rebrand and rebuild of Fathom (AI meeting notetaker), aiming for feature parity with the original and then improving on it. The required loop from the assignment: connect a calendar → get the notetaker into a real meeting → record → playback synced to transcript → AI summary with switchable templates → action items → mid-call highlights → search across meetings → share a clip with an outsider → hold up on an 8-person, 1-hour call.
@@ -12,7 +14,6 @@ Decisions already made with the user:
 - **Scope is parity-plus, not a minimal cut.** Work is ordered by priority so the product is demonstrable at every step, but no feature of the original is dropped for deadline reasons alone.
 - **No platform verification waits.** Nothing may depend on Google OAuth verification, Zoom Marketplace review or Chrome Web Store review.
 - **Fault isolation.** One broken module must not take down the rest.
-- **This document is the deliverable.** No code yet.
 
 What `flows/` shows (22 screenshots): sign-up (Google / Microsoft), Google calendar consent, personal-email detection, 3-step preferences ("take notes on X and share with Y" plus a consent checkbox), job-function question, desktop-app download and permissions, the app's settings panel (auto-capture, capture mode, notifications, privacy, consent chat message), the customize page (per-platform status, auto-record and auto-share rules), and an empty home with tabs (My Calls, Team Calls, Playlists, Alerts, Deals), search bar and an "Ask Fathom" panel with a scope picker (My / Team / All calls). The recording page itself was not captured, so it is designed from the assignment brief and public knowledge of the product.
 
@@ -30,14 +31,14 @@ What `flows/` shows (22 screenshots): sign-up (Google / Microsoft), Google calen
   - A **dedicated Google account** for the bot. The user signs it in once by hand; the bot reuses that persistent Chrome profile. Signed-in accounts are refused far less than anonymous guests.
   - **Real Chrome on a virtual display,** not headless mode.
   - The bot never attempts a CAPTCHA or any bot-detection challenge; it reports the block and stops.
-  - **Plain failure states** on the meeting ("Host didn't admit Milo", "This meeting doesn't allow guests") with a one-click switch to the browser recorder.
+  - **Plain failure states** on the meeting ("Host didn't admit Milo", "This meeting doesn't allow guests") with a one-click switch to uploading a recording.
   - Join timeout, and a partial recording is still processed if the bot is removed mid-call.
-- **Fallbacks, same pipeline:** an in-browser tab recorder (no bot) and file upload, so a blocked bot never means a lost meeting.
+- **Fallback, same pipeline:** file upload feeds the identical pipeline, so a blocked bot never means a lost meeting. (An in-browser tab recorder was planned and is **not built**.)
 - **Platforms: Google Meet and Zoom are both required; Teams follows.** Each platform is a separate join script behind one interface (`join`, `postConsent`, `watchSpeakers`, `watchChat`, `detectEnd`); recording, sidecar and upload are shared.
   - **Meet:** join by link with the bot's Google account.
   - **Zoom:** join through Zoom's web client by link as a named guest (meeting ID and passcode are parsed from the invite). No Zoom app or Marketplace review. Speaker names come from the active-speaker indicator, since captions depend on the host. Known blocks: host disabled browser joining, "authenticated users only", waiting room never admitted, or Zoom shows a CAPTCHA (the bot stops and reports it).
   - **Teams:** anonymous web join by link; blocked where the tenant disables anonymous join.
-- Where it runs: a container with a virtual display and virtual audio device, on a VM or the developer's machine. Not a serverless host.
+- Where it runs: a container with a virtual display and virtual audio device, on an always-on machine or the developer's machine (Docker). Not a serverless host.
 
 The bot's only outputs are an uploaded recording, a caption/participant sidecar file, and a `recording.uploaded` event. Nothing downstream knows or cares which capture source produced them.
 
@@ -87,12 +88,13 @@ bot:    join → consent → record → sidecar (captions, participants, chat) �
 | ORM | Drizzle | Typed schema, plain SQL when needed |
 | Queue | pg-boss (Postgres-backed) | No Redis; retries, backoff, schedules, rate limits |
 | Auth | Auth.js: Google (with calendar scope), later Microsoft | Same flow yields the calendar token |
-| Storage | S3-compatible adapter: MinIO locally, Cloudflare R2 deployed | Large files, range requests |
+| Storage | Adapter with two implementations: local disk (development) and S3-compatible (MinIO locally, Cloudflare R2 hosted). Hosted mode uses presigned URLs so recordings go straight between the browser/bot and the bucket | Large files, range requests, serverless-friendly |
 | Bot | Playwright + Chromium, virtual display and audio, ffmpeg capture | Free, self-hosted, no vendor |
 | Media | ffmpeg in the worker | Seekable mp4, audio extraction, clip cutting |
-| Speech-to-text | Deepgram (diarization, word timestamps) behind an adapter; Gemini audio as fallback | Accurate timestamps drive playback sync, clips and highlights; sign-up credit is free |
-| LLM + embeddings | Gemini via Google AI Studio key, behind an adapter; model ID in config | Free tier; a 1-hour transcript fits in one request |
-| Run | `docker compose up`: postgres, minio, web, worker, bot | Whole product on one machine or VM |
+| Speech-to-text | **(as built)** Gemini audio with model fallback (diarization via prompt, word timing normalised); Whisper on Groq as an opt-in fallback (accurate words, no speaker separation). Deepgram was considered and not built | Free tier; timestamps drive playback sync, clips and highlights |
+| LLM | Gemini via Google AI Studio key, behind an adapter, with model fallback; Groq (qwen) as an opt-in backup when the daily quota is gone | Free tier; a 1-hour transcript fits in one request |
+| Embeddings | Local multilingual-e5-small model (free, no quota), served to the hosted web app by the worker over HTTPS; each vector records its model | Gemini embeddings are capped at 1,000 texts/day |
+| Run | Local: `docker compose` (postgres, minio, bots) + `pnpm dev:web` / `pnpm dev:worker`. Hosted: website on Vercel, Postgres on Neon, files on R2; worker + bots + tunnel on an always-on machine via `docker-compose.vm.yml` | Website stays up independently of the machine running the worker |
 
 Free-tier consequences designed in: LLM jobs are throttled by the queue to stay under per-minute and per-day caps; every summary is cached per template; the walkthrough notes that free-tier content may be used by Google.
 
@@ -107,7 +109,7 @@ Every provider (calendar, storage, STT, LLM, email, capture) has an interface, a
 | 1 | identity | web | Sign-in, session, onboarding, preferences, workspace membership | App unreachable; kept smallest |
 | 2 | calendar | worker + web | Sync events (Google, ICS), parse meeting links and attendees, apply auto-record rule, schedule bot joins | Home shows last synced events and a warning; manual "send Milo" still works |
 | 3 | bot | bot | Join, consent message, record, sidecar, upload | Meeting marked "bot couldn't join" with reason; browser recorder and upload still work |
-| 4 | capture-alt | web (browser) | Tab recorder and file upload | Bot path unaffected |
+| 4 | capture-alt | web (browser) | File upload (tab recorder planned, not built) | Bot path unaffected |
 | 5 | media | worker | Seekable mp4, audio extract, poster, duration, clip cuts | "Processing failed — retry"; raw file kept |
 | 6 | transcription | worker | Diarized, word-timed transcript; merge speaker names from sidecar | Playback works; transcript panel shows retry |
 | 7 | intelligence | worker + web (streaming) | Summary per template, action items, chapters, topics | Transcript, playback, search still work |
@@ -208,19 +210,21 @@ A long multi-speaker recording is loaded through the upload path at the start of
 milo-ai/
   apps/
     web/        Next.js: routes, UI, API handlers
-                app/(auth) (onboarding) (app)/home meetings/[id] live/[id]
-                    search playlists alerts settings share/[token]
+                onboarding, (app)/home meetings/[id] ask search playlists
+                    alerts settings customize, share/[token], api/
     worker/     pg-boss process; registers one handler per module
     bot/        Playwright runner; platforms/meet (then zoom, teams); recorder; sidecar
   packages/
     db/         Drizzle schema, migrations, seed
     core/       event names, job contracts, shared types, time utils
     modules/    calendar/ media/ transcription/ intelligence/ indexing/
-                search/ sharing/ notify/
+                search/ sharing/ notify/ playlists/
     providers/  storage, stt, llm, calendar, email — each: interface + real + fake
-    ui/         design tokens, shared components
-  docker-compose.yml     postgres(pgvector), minio, web, worker, bot
-  docs/ARCHITECTURE.md   this brief, committed
+    ui/         shared UI components
+  docker-compose.yml     local development: postgres(pgvector), minio, bots
+  docker-compose.vm.yml  always-on machine: worker, bots, tunnel
+  Dockerfile             image for web and worker
+  docs/                  architecture brief, bot, deployment and walkthrough notes
   .agent-logs/  CAPTURE-TEST.md  .claude/   (already in place)
 ```
 
@@ -245,15 +249,15 @@ Each step ends with something demonstrable.
 | 8 | Search + Ask Milo | Cross-meeting search and cited answers |
 | 9 | Parity | Team Calls, Playlists, Alerts, auto-share recap email, settings/customize pages, Microsoft sign-in |
 | 10 | Teams join script | Bot on a third platform |
-| 11 | Polish + deploy | States, dark/light, hosted on a VM, walkthrough notes (built: see docs/DEPLOY.md, docs/WALKTHROUGH.md) |
+| 11 | Polish + deploy | Empty/error states, dark/light, hosting on Vercel + Neon + R2 with the worker and bots on an always-on machine, walkthrough notes (see docs/VERCEL.md, docs/DEPLOY.md, docs/WALKTHROUGH.md) |
 
 The bot comes after the pipeline on purpose: it needs somewhere to deliver a recording, and the upload path lets everything downstream be built and judged without waiting on the most fragile piece. If the bot stalls, the browser recorder is the working capture path while it is fixed.
 
 ---
 
-## 11. Verification (once built)
+## 11. Verification
 
-1. `docker compose up`; sign in; finish onboarding; home shows real upcoming events (Google test user, then ICS).
+1. Start the stack (see README); sign in; finish onboarding; home shows real upcoming events (Google test user, then ICS).
 2. (Repeat this step on a Zoom call.) Schedule a Google Meet; at start time the bot asks to join; admit it; the consent message appears in chat; talk for two minutes; type `/milo highlight`; end the call. The meeting appears and moves through each stage.
 3. Meeting page: play and confirm the transcript follows; click a line to seek; speakers carry real names; switch three templates; tick an action item and jump to its source.
 4. The highlight covers the 30 s before the command; turn it into a clip; open the link in a private window with no session.
@@ -262,3 +266,5 @@ The bot comes after the pipeline on purpose: it needs somewhere to deliver a rec
 7. Fault isolation: stop `bot` — web and pipeline work, upload still records a meeting. Stop `worker` — web still browses, plays and searches. Force the LLM to fail — summary panel shows retry while transcript and playback work.
 8. Bot failure paths: host never admits (times out with a clear status), bot removed mid-call (partial recording still processed).
 9. Capture log check: `.agent-logs/` has an entry for every prompt in the build.
+
+**Status of this checklist (as built):** items 1–7 were exercised on real Google Meet calls or the upload path; Teams and Zoom joining, Microsoft sign-in and real email delivery are built but not yet verified live.

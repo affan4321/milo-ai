@@ -28,10 +28,11 @@ network first, then retry.
 
 ## 2. Run the bot
 
-The bot needs the web app reachable from the container and a shared `BOT_TOKEN` (already in `.env`):
+The bot needs the web app reachable from the container and a shared `BOT_TOKEN`. Both, plus the database it takes join jobs from, come from `.env` (`APP_URL`, `BOT_TOKEN`, `DATABASE_URL`). Locally set `APP_URL=http://host.docker.internal:3000`; hosted, it is the website's public address.
 
 ```bash
-BOT_WEB_URL=http://host.docker.internal:3000 docker compose up -d bot
+docker compose up -d bot            # local development
+docker compose -f docker-compose.vm.yml up -d bot   # always-on machine (also runs the worker and tunnel)
 docker compose logs -f bot
 ```
 

@@ -18,8 +18,9 @@ services:
     build: { context: ., dockerfile: apps/bot/Dockerfile }
     depends_on: [postgres]
     environment: &botenv
-      DATABASE_URL: postgres://milo:milo@postgres:5432/milo
-      WEB_URL: ${BOT_WEB_URL:-http://host.docker.internal:3000}
+      # Bots take join jobs from the SAME database as the worker, and call the web app at APP_URL (both from .env). Defaults suit all-local use.
+      DATABASE_URL: ${DATABASE_URL:-postgres://milo:milo@postgres:5432/milo}
+      WEB_URL: ${BOT_WEB_URL:-${APP_URL:-http://host.docker.internal:3000}}
       BOT_TOKEN: ${BOT_TOKEN:-}
       BOT_VNC_PASSWORD: ${BOT_VNC_PASSWORD:-}
       BOT_DEBUG: ${BOT_DEBUG:-0}

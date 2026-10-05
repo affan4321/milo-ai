@@ -1,47 +1,47 @@
-# Deploying Milo on one VM
+# Running Milo for real: what runs where
 
-One machine runs everything: Postgres, web, worker, meeting bots and an HTTPS proxy. A 4 vCPU / 8 GB VM handles the app plus
-two or three concurrent meetings (each bot needs about 1 core and 1 GB). Recordings and the search model live on a disk volume,
-so size the disk for your recordings (about 0.5–1 GB per meeting-hour).
+| Piece | Where | Why |
+|---|---|---|
+| Website | Vercel (`https://miloainotetaker.vercel.app`) | always on, free |
+| Database | Neon | hosted Postgres |
+| Recordings and clips | Cloudflare R2 | hosted storage |
+| **Worker, meeting bots, tunnel** | **an always-on machine** | long-running; needs Chrome, ffmpeg and a constant process |
 
-## 1. Prepare
-1. A Linux VM with Docker and the Compose plugin, ports 80 and 443 open, and a DNS name pointing at it.
-2. `git clone` the repo, then fill in `.env` (see the VM section of `.env.example`). Generate every secret with
-   `openssl rand`. This file is never committed.
-3. Google sign-in: in the Google Cloud console add `https://<your-domain>/api/auth/callback/google` as an authorised redirect URI.
-   (Microsoft: `https://<your-domain>/api/auth/callback/microsoft-entra-id`.)
+The first three are hosted (docs/VERCEL.md). The last row is the only thing that must stay running on a machine. If that
+machine is your laptop, processing and bots stop when it sleeps. Put it on a small always-on server instead:
 
-## 2. Start
+## 1. The server
+Any Linux x86-64 VM with Docker and the Compose plugin, ~2 vCPU / 4 GB RAM for the worker plus one or two bots (about 1 core and
+1 GB per concurrent meeting, plus ~1 GB for the embedding model). Outbound internet only; **no inbound ports** are needed
+(the tunnel dials out). Prefer x86: Chrome for Linux has no ARM build, so on ARM the bot falls back to Chromium, which Meet may treat differently.
+
+## 2. Set up
 ```bash
-docker compose -f docker-compose.prod.yml --env-file .env up -d --build
-docker compose -f docker-compose.prod.yml ps          # web should become "healthy"
+git clone <repo> && cd milo-ai
+# .env on the server: copy the one from your laptop, plus two lines for the tunnel:
+#   NGROK_AUTHTOKEN=<from dashboard.ngrok.com>     NGROK_DOMAIN=<your-domain>.ngrok-free.app
+docker compose -f docker-compose.vm.yml up -d --build
+docker compose -f docker-compose.vm.yml ps            # worker should become "healthy"
 ```
-Database migrations run automatically before web and worker start. Open `https://<your-domain>`.
+Everything restarts by itself after a crash or reboot (`restart: unless-stopped`; enable Docker at boot with `systemctl enable docker`).
+Stop the copies on your laptop, so two workers don't compete for the same jobs.
 
-## 3. Sign the bot in (once)
-Follow docs/bot.md §1, using the production compose file and its `botprofile` volume. Then scale bots:
-`docker compose -f docker-compose.prod.yml --env-file .env up -d --scale bot=3 bot`.
+## 3. Sign the bot in (once, on the server)
+`docker compose -f docker-compose.vm.yml run --rm --service-ports bot-login`, then follow docs/bot.md §1 (VNC over an SSH tunnel:
+`ssh -L 5900:localhost:5900 user@server`). Then `docker compose -f docker-compose.vm.yml up -d --scale bot=2 bot`.
 
 ## 4. Updating
-```bash
-git pull
-docker compose -f docker-compose.prod.yml --env-file .env up -d --build
-```
-A recording in progress is uploaded by the bot when the call ends, so restart bots between meetings.
+`git pull && docker compose -f docker-compose.vm.yml up -d --build`. The website redeploys itself when you push to GitHub.
 
-## 5. Backups
-- Database: `docker compose -f docker-compose.prod.yml exec postgres pg_dump -U milo milo | gzip > milo-$(date +%F).sql.gz`
-- Recordings: the `appdata` volume (`/data/storage`). The search model in `/data/models` re-downloads if lost.
-Do both on a schedule (cron) and copy them off the machine.
+## 5. Checks
+- `docker compose -f docker-compose.vm.yml logs -f worker bot tunnel`
+- `https://<NGROK_DOMAIN>/health` returns `{"ok":true}`.
+- `https://miloainotetaker.vercel.app/api/health` returns `{"ok":true}` (website can reach the database).
+- Nothing summarised? Look for "quota" in the worker log: Gemini's free tier is limited per day.
 
-## 6. Troubleshooting
-- `docker compose ... logs -f web worker bot`
-- `GET /api/health` returns `{"ok":true}` when web can reach the database.
-- Nothing summarised? Look at the worker log for "quota": Gemini's free tier is limited per day; set `GROQ_API_KEY` and
-  `LLM_FALLBACK_PROVIDER=groq` for short meetings, or enable billing.
+## Backups
+Neon keeps point-in-time history on its own plan; R2 holds the recordings. The server itself holds nothing irreplaceable
+except the bot's signed-in profile (`botprofile` volume), which is a one-minute re-login if lost.
 
 ## Known limits
-- Storage is the local disk volume (`STORAGE_PROVIDER=local`). The S3 variables in `.env.example` are reserved; an S3 adapter is not built.
-- One VM, no high availability. Postgres and the volumes are the state worth backing up.
-- Email defaults to files in `/data/outbox`. Set `EMAIL_PROVIDER=resend` for real delivery (verified only against a mock).
-- Zoom and Teams selectors are unverified against live calls.
+One server, no failover. Zoom and Teams selectors are unverified against live calls. Email defaults to files in `/data/outbox`; set `EMAIL_PROVIDER=resend` for real delivery.
