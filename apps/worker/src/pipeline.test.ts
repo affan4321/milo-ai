@@ -7,6 +7,7 @@ import { generateInsights, getOrCreateSummary } from "@milo/intelligence";
 import { processMedia } from "@milo/media";
 import { transcribeRecording } from "@milo/transcription";
 import fs from "node:fs";
+import { assertTestDatabase } from "@milo/db"; assertTestDatabase(); // never run these against the hosted database
 
 const file = process.argv[2]!;
 const db = getDb(), storage = new LocalStorage();

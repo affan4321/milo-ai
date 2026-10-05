@@ -54,9 +54,13 @@ r = await fb.insights(input);
 check(urls.length === 2 && urls[0]!.includes("/primary:") && urls[1]!.includes("/backup:") && r.chapters.length === 1, "falls back to the next model on daily quota");
 const allOut = new GeminiLlm({ apiKey: "k", model: "a", fallbackModels: ["b"], fetch: reply(429, dailyBody) });
 e = await allOut.insights(input).catch((x) => x); check(e instanceof DailyQuotaError && /all configured models \(a, b\)/.test((e as Error).message), "all models exhausted -> clear error naming them");
-// a non-quota error on the primary does NOT trigger fallback
+// an overloaded (5xx) primary hands over to the next model at once; if every model is overloaded the error stays transient (retryable)
 urls.length = 0;
 const nf = new GeminiLlm({ apiKey: "k", model: "primary", fallbackModels: ["backup"], fetch: (async (u: string) => { urls.push(u); return new Response("{}", { status: 503 }); }) as any });
-e = await nf.insights(input).catch((x) => x); check(e && urls.length === 1, "503 does not burn the fallback model's quota");
+e = await nf.insights(input).catch((x) => x); check(e && urls.length === 2 && !isPermanent(e) && /temporarily unavailable/.test((e as Error).message), "503 tries the next model, and stays retryable if all are overloaded");
+// a genuine request error (not quota, not overload) does NOT trigger fallback: it would fail identically on the next model
+urls.length = 0;
+const bad = new GeminiLlm({ apiKey: "k", model: "primary", fallbackModels: ["backup"], fetch: (async (u: string) => { urls.push(u); return new Response('{"error":{"message":"bad schema"}}', { status: 400 }); }) as any });
+e = await bad.insights(input).catch((x) => x); check(e && urls.length === 1 && isPermanent(e), "a 400 is permanent and does not touch the fallback model");
 
 console.log(fails ? `${fails} FAILED` : "ok"); process.exit(fails ? 1 : 0);

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { DailyQuotaError, PermanentError } from "@milo/core";
+import { GeminiUnavailableError } from "../llm/client";
 import type { SttInput, SttProvider, StorageProvider, TranscriptSegmentOut } from "../types";
 
 export interface WhisperOptions { apiKey: string; baseUrl: string; model: string; fetch?: typeof fetch; chunkSeconds?: number; cut?: (file: string, startSec: number, lenSec: number, out: string) => Promise<void> }
@@ -76,11 +77,11 @@ export class WhisperStt implements SttProvider {
   }
 }
 
-/** Gemini first; Whisper only when Gemini's daily audio allowance is used up. Everything else propagates (and is retried by the queue). */
+/** Gemini first; Whisper when Gemini's daily audio allowance is used up or every Gemini model is overloaded. Everything else propagates (and is retried by the queue). */
 export class FallbackStt implements SttProvider {
   constructor(private primary: SttProvider, private backup: SttProvider, private onFallback?: (why: string) => void) {}
   async transcribe(input: SttInput, storage: StorageProvider) {
     try { return await this.primary.transcribe(input, storage); }
-    catch (e) { if (!(e instanceof DailyQuotaError)) throw e; this.onFallback?.(e.message); return this.backup.transcribe(input, storage); }
+    catch (e) { if (!(e instanceof DailyQuotaError || e instanceof GeminiUnavailableError)) throw e; this.onFallback?.(e.message); return this.backup.transcribe(input, storage); }
   }
 }

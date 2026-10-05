@@ -38,5 +38,6 @@ export class LocalStorage implements StorageProvider {
   async putFile(key: string, localPath: string) { await fs.promises.copyFile(localPath, this.prep(key)); }
   async toLocalFile(key: string) { return this.abs(key); }
   async size(key: string) { try { return (await fs.promises.stat(this.abs(key))).size; } catch { return null; } }
+  async delete(key: string) { await fs.promises.rm(this.abs(key), { force: true }); }
   read(key: string, range?: { start: number; end: number }) { return fs.createReadStream(this.abs(key), range); }
 }

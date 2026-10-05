@@ -6,6 +6,7 @@ import { getDb, users, meetings, recordings, speakers, transcriptSegments } from
 import { LocalStorage } from "@milo/providers";
 import { processMedia } from "@milo/media";
 import { createClip, renderClip, createShare, revokeShares } from "@milo/sharing";
+import { assertTestDatabase } from "@milo/db"; assertTestDatabase(); // never run these against the hosted database
 
 const WEB = process.env.WEB_TEST_URL ?? "http://localhost:3000";
 let fails = 0;

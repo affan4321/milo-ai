@@ -4,7 +4,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { PassThrough, type Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { S3Client, GetObjectCommand, HeadObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { StorageProvider } from "../types";
@@ -59,6 +59,7 @@ export class S3Storage implements StorageProvider {
     try { return (await this.s3.send(new HeadObjectCommand({ Bucket: this.Bucket, Key: key }))).ContentLength ?? 0; }
     catch (e: any) { if (e?.$metadata?.httpStatusCode === 404 || e?.name === "NotFound") return null; throw e; }
   }
+  async delete(key: string) { await this.s3.send(new DeleteObjectCommand({ Bucket: this.Bucket, Key: key })); } // S3 answers success for a missing key
   read(key: string, range?: { start: number; end: number }) {
     const out = new PassThrough();
     this.s3.send(new GetObjectCommand({ Bucket: this.Bucket, Key: key, Range: range ? `bytes=${range.start}-${range.end}` : undefined }))

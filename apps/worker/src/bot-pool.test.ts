@@ -6,6 +6,7 @@ import PgBoss from "pg-boss";
 import { BOT_JOIN_QUEUE, BOT_QUEUE_OPTIONS, CONSENT_MESSAGE, type BotJob } from "@milo/core";
 import { getDb, users, preferences, meetings, botSessions, botWorkers, recordings } from "@milo/db";
 import { botCapacity } from "@milo/calendar";
+import { assertTestDatabase } from "@milo/db"; assertTestDatabase(); // never run these against the hosted database
 
 const MOCK = "http://localhost:8801", FROM_BOT = "http://host.docker.internal:8801";
 const REPLICAS = Number(process.env.REPLICAS ?? 2);

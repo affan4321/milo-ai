@@ -3,6 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import { getDb, users, preferences, meetings, speakers, transcriptSegments, summaries, actionItems, calendarConnections, calendarEvents, ensureWorkspace, alerts, alertHits } from "@milo/db";
 import { FakeEmail } from "@milo/providers";
 import { recipientsFor, buildRecapEmail, sendRecap, createAlert, deleteAlert, listAlerts, listHits, evaluateAlertsForMeeting, MAX_ALERTS } from "@milo/notify";
+import { assertTestDatabase } from "@milo/db"; assertTestDatabase(); // never run these against the hosted database
 
 let fails = 0;
 const check = (c: unknown, m: string) => { console.log(c ? "  ok  " : "  FAIL", m); if (!c) fails++; };

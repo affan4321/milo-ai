@@ -43,7 +43,7 @@ export class GeminiLlm implements LlmProvider {
   private async generate(schema: object, userText: string): Promise<unknown> {
     const models = [this.model, ...(this.o.fallbackModels ?? [])];
     const r = await geminiJsonFallback({ apiKey: this.o.apiKey, fetch: this.f }, models, { system: SYSTEM, parts: [{ text: userText }], schema },
-      (from, to) => console.warn(`[gemini] daily limit reached for ${from}; falling back to ${to}`));
+      (from, to, why) => console.warn(`[gemini] ${from} ${why === "quota" ? "daily limit reached" : "is overloaded"}; falling back to ${to}`));
     return r.data;
   }
 

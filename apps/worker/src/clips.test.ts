@@ -6,6 +6,7 @@ import { getDb, users, meetings, recordings, speakers, transcriptSegments, summa
 import { LocalStorage } from "@milo/providers";
 import { processMedia } from "@milo/media";
 import { createClip, renderClip, createShare, revokeShares, resolveShare, buildShareView, listClips, newToken } from "@milo/sharing";
+import { assertTestDatabase } from "@milo/db"; assertTestDatabase(); // never run these against the hosted database
 
 let fails = 0;
 const check = (c: unknown, m: string) => { console.log(c ? "  ok  " : "  FAIL", m); if (!c) fails++; };

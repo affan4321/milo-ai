@@ -75,4 +75,5 @@ export { MicrosoftCalendar, MicrosoftAuthError, parseGraphEvents } from "./calen
 export { OpenAiCompatLlm } from "./llm/openai-compat";
 export { LocalEmbeddings, WithEmbedder } from "./llm/local-embed";
 export { FallbackLlm } from "./llm/fallback";
+export { GeminiUnavailableError } from "./llm/client";
 export { WhisperStt, FallbackStt, looksLikeNoise } from "./stt/whisper";

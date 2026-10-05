@@ -64,7 +64,7 @@ export class GeminiStt implements SttProvider {
         const r = await this.withRetry(() => geminiJsonFallback(this.o, models, {
           system: SYSTEM, schema: SCHEMA, temperature: 0,
           parts: [{ text: this.context(out) + `\nThis audio file is ${lenSec} seconds long. Transcribe it.` }, { inlineData: { mimeType: "audio/mp4", data } }],
-        }, (from, to) => console.warn(`[gemini-stt] daily limit reached for ${from}; continuing on ${to}`)));
+        }, (from, to, why) => console.warn(`[gemini-stt] ${from} ${why === "quota" ? "daily limit reached" : "is overloaded"}; continuing on ${to}`)));
         models = models.slice(models.indexOf(r.model));
         out.push(...normalizeChunk(r.data, startSec * 1000, lenSec * 1000));
       }
@@ -83,7 +83,7 @@ export class GeminiStt implements SttProvider {
   }
 
   private async withRetry<T>(fn: () => Promise<T>): Promise<T> {
-    const delays = this.o.retryDelaysMs ?? [15_000, 45_000, 90_000];
+    const delays = this.o.retryDelaysMs ?? [5_000, 20_000]; // short: when Gemini stays down, a backup provider (Whisper) takes over after the queue gives up on it
     for (let i = 0; ; i++) {
       try { return await fn(); }
       catch (e) {

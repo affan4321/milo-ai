@@ -5,6 +5,7 @@ import { getDb, users, meetings, recordings, speakers, transcriptSegments, ensur
 import { FakeLlm } from "@milo/providers";
 import { indexRecording, unindexedCount, findUnindexedRecordings } from "@milo/indexing";
 import { searchMeetings, askMilo, editMessage, listThreads, deleteThread, loadThread, renumberCitations, hybridHits } from "@milo/search";
+import { assertTestDatabase } from "@milo/db"; assertTestDatabase(); // never run these against the hosted database
 
 let fails = 0;
 const check = (c: unknown, m: string) => { console.log(c ? "  ok  " : "  FAIL", m); if (!c) fails++; };

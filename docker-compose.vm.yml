@@ -27,10 +27,11 @@ services:
     depends_on: [worker]
     restart: unless-stopped
 
-  # Meeting bots: one meeting each. Sign in the bot's Google account once on this machine (docs/bot.md), then scale with --scale bot=3.
+  # Meeting bots: one meeting each (2 by default). Sign in the bot's Google account once on this machine (docs/bot.md); more with --scale bot=3.
   bot:
     image: milo-ai-bot:latest
     build: { context: ., dockerfile: apps/bot/Dockerfile }
+    deploy: { replicas: 2 }   # two bots (two meetings at once) from a plain `up -d`; override with --scale bot=N
     environment:
       DATABASE_URL: ${DATABASE_URL}
       WEB_URL: ${APP_URL}

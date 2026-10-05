@@ -1,6 +1,14 @@
 import { DailyQuotaError, PermanentError } from "@milo/core";
 import { extractJson } from "./normalize";
 
+/**
+ * Gemini answered 5xx (overloaded / unavailable). Transient, so the queue retries it; but it is ALSO the signal to hand over to the next
+ * model (or a different provider) immediately instead of waiting on the same overloaded model.
+ */
+export class GeminiUnavailableError extends Error {
+  constructor(message: string, readonly model?: string) { super(message); this.name = "GeminiUnavailableError"; }
+}
+
 export interface GeminiClientOptions { apiKey: string; model?: string; fetch?: typeof fetch; timeoutMs?: number }
 export type GeminiPart = { text: string } | { inlineData: { mimeType: string; data: string } };
 
@@ -29,7 +37,7 @@ export async function geminiCall(o: GeminiClientOptions, method: "generateConten
       }
       throw new Error(`Gemini rate limit reached (free tier). ${msg}`);
     }
-    if (res.status >= 500) throw new Error(`Gemini is temporarily unavailable (${res.status}).`);
+    if (res.status >= 500) throw new GeminiUnavailableError(`Gemini is temporarily unavailable (${res.status}).`, model);
     if (res.status === 400 && /API key|API_KEY/i.test(msg)) throw new PermanentError("Gemini rejected the API key. Check GEMINI_API_KEY.");
     if (res.status === 401 || res.status === 403) throw new PermanentError(`Gemini refused the request: ${msg}`);
     throw new PermanentError(`Gemini request failed: ${msg}`);
@@ -52,16 +60,22 @@ export async function geminiJson(o: GeminiClientOptions, req: { system: string; 
   return extractJson(text);
 }
 
-/** Try models in order; a model whose daily quota is spent hands over to the next. Anything else propagates untouched. */
-export async function geminiJsonFallback(o: GeminiClientOptions, models: string[], req: Parameters<typeof geminiJson>[1], onSwitch?: (from: string, to: string) => void): Promise<{ data: unknown; model: string }> {
-  let last: DailyQuotaError | undefined;
+/**
+ * Try models in order. A model whose daily quota is spent, or that is overloaded (5xx), hands over to the next one at once.
+ * Anything else propagates untouched. If every model was only overloaded, the overload error is thrown (transient: retried, or handed to
+ * another provider); if every model's daily quota is spent, DailyQuotaError is thrown.
+ */
+export async function geminiJsonFallback(o: GeminiClientOptions, models: string[], req: Parameters<typeof geminiJson>[1], onSwitch?: (from: string, to: string, why: "quota" | "unavailable") => void): Promise<{ data: unknown; model: string }> {
+  let quota: DailyQuotaError | undefined, down: GeminiUnavailableError | undefined;
   for (let i = 0; i < models.length; i++) {
     try { return { data: await geminiJson({ ...o, model: models[i] }, req), model: models[i]! }; }
     catch (e) {
-      if (!(e instanceof DailyQuotaError)) throw e;
-      last = e;
-      if (i + 1 < models.length) onSwitch?.(models[i]!, models[i + 1]!);
+      if (e instanceof DailyQuotaError) quota = e;
+      else if (e instanceof GeminiUnavailableError) down = e;
+      else throw e;
+      if (i + 1 < models.length) onSwitch?.(models[i]!, models[i + 1]!, e instanceof DailyQuotaError ? "quota" : "unavailable");
     }
   }
-  throw new DailyQuotaError(models.length > 1 ? `Gemini's daily limit is used up for all configured models (${models.join(", ")}). ${last!.message.split("; ")[1] ?? "Retry later."}` : last!.message, models[models.length - 1]!, last?.retryAfterSec);
+  if (down) throw down;
+  throw new DailyQuotaError(models.length > 1 ? `Gemini's daily limit is used up for all configured models (${models.join(", ")}). ${quota!.message.split("; ")[1] ?? "Retry later."}` : quota!.message, models[models.length - 1]!, quota?.retryAfterSec);
 }

@@ -9,6 +9,7 @@ import { BOT_JOIN_QUEUE, BOT_QUEUE_OPTIONS, CONSENT_MESSAGE, type BotJob } from 
 import { getDb, users, preferences, meetings, botSessions, recordings, speakers, participants, transcriptSegments, highlights } from "@milo/db";
 import { addLiveHighlight } from "@milo/sharing";
 import { LocalStorage } from "@milo/providers";
+import { assertTestDatabase } from "@milo/db"; assertTestDatabase(); // never run these against the hosted database
 
 const MOCK = "http://localhost:8801", MOCK_FROM_BOT = "http://host.docker.internal:8801";
 const db = getDb(), boss = new PgBoss(process.env.DATABASE_URL!);

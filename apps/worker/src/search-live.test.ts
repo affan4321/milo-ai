@@ -6,6 +6,7 @@ import { getDb, users, meetings, recordings, speakers, transcriptSegments, ensur
 import { getProviders } from "@milo/providers";
 import { indexRecording } from "@milo/indexing";
 import { searchMeetings, askMilo } from "@milo/search";
+import { assertTestDatabase } from "@milo/db"; assertTestDatabase(); // never run these against the hosted database
 
 const db = getDb(), llm = getProviders().llm;
 console.log("embedding via:", process.env.GEMINI_EMBED_MODELS || "gemini-embedding-001", "| answers via:", process.env.GEMINI_MODEL);

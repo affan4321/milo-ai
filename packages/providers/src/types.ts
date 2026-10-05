@@ -12,6 +12,8 @@ export interface StorageProvider {
   size(key: string): Promise<number | null>;
   /** Inclusive byte range, for HTTP Range playback. */
   read(key: string, range?: { start: number; end: number }): Readable;
+  /** Remove one object. Deleting a key that does not exist is not an error. */
+  delete(key: string): Promise<void>;
   /**
    * Remote storage only: a time-limited URL a client can PUT/GET directly, so large files never pass through the web app (required on
    * serverless hosting). A PUT must send Content-Type: contentTypeFor(key). Absent on local disk storage.

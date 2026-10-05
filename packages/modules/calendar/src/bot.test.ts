@@ -2,6 +2,7 @@
 import { eq } from "drizzle-orm";
 import { getDb, users, preferences, calendarConnections, calendarEvents, meetings, botSessions, botWorkers } from "@milo/db";
 import { planBotJoins, shouldRecord, createBotSession, applyBotState, reapStaleBotSessions, recordWorkerBeat, botCapacity } from "./bot";
+import { assertTestDatabase } from "@milo/db"; assertTestDatabase(); // never run these against the hosted database
 
 let fails = 0;
 const check = (c: unknown, m: string) => { if (!c) { fails++; console.error("FAIL:", m); } };

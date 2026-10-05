@@ -3,6 +3,7 @@ import http from "node:http";
 import { eq } from "drizzle-orm";
 import { getDb, users, calendarConnections, calendarEvents } from "@milo/db";
 import { connectIcs, syncConnection } from "./index";
+import { assertTestDatabase } from "@milo/db"; assertTestDatabase(); // never run these against the hosted database
 
 const day = (n: number, h = 15) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 11).replace(/-|:/g, "") + String(h).padStart(2, "0") + "0000Z";
 let body = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nUID:t1\nDTSTART:${day(1)}\nDTEND:${day(1, 16)}\nSUMMARY:Design review\nLOCATION:https://meet.google.com/aaa-bbbb-ccc\nEND:VEVENT\nEND:VCALENDAR`;

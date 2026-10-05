@@ -2,6 +2,7 @@
 import { eq } from "drizzle-orm";
 import { getDb, users, meetings, botSessions } from "@milo/db";
 import { addHighlight, addHighlightAt, addLiveHighlight, listHighlights, deleteHighlight } from "./highlights";
+import { assertTestDatabase } from "@milo/db"; assertTestDatabase(); // never run these against the hosted database
 
 let fails = 0;
 const check = (c: unknown, m: string) => { if (!c) { fails++; console.error("FAIL:", m); } };

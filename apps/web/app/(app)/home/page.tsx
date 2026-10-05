@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
 import { BOT_ACTIVE_STATES } from "@milo/core";
-import { botCapacity } from "@milo/calendar";
+import { botCapacity, SUPPORTED_PLATFORMS } from "@milo/calendar";
 import { botStatusText } from "@/lib/bot-status";
 import { getDb, calendarConnections, calendarEvents, meetings, botSessions } from "@milo/db";
 import { listTeamMeetings } from "@milo/search";
@@ -12,6 +12,7 @@ import { AutoRefresh } from "../meetings/[id]/auto-refresh";
 import { SendMilo } from "./send-milo";
 import { RecordToggle } from "./record-toggle";
 import { UploadButton } from "./upload-button";
+import { RecentCalls } from "./recent-calls";
 import { getCurrentUser } from "@/lib/session";
 import { ConnectIcsForm } from "./connect-form";
 import { resyncAction } from "./actions";
@@ -71,6 +72,13 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ t
   const failing = conns.find((c) => c.lastError);
   const lastSync = conns.map((c) => c.lastSyncedAt).filter(Boolean).sort().pop();
 
+  // Only events Milo could actually attend belong in "Upcoming meetings". Reminders, birthdays and other entries with no meeting link
+  // are still synced, but they sit in a quiet note below instead of being listed as meetings.
+  const isMeeting = (e: (typeof events)[number]) => !!e.meetingUrl && e.platform !== "unknown";
+  const upcoming = events.filter(isMeeting);
+  const otherEvents = events.filter((e) => !isMeeting(e));
+  const canJoin = (platform: string) => (SUPPORTED_PLATFORMS as readonly string[]).includes(platform);
+
   const eventRow = (e: (typeof events)[number]) => (
     <li key={e.id} className="flex items-center gap-4 px-4 py-3">
       <span className="w-[4.5rem] shrink-0 text-sm font-medium tabular-nums">{timeLabel(e.startsAt)}</span>
@@ -78,8 +86,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ t
         <div className="truncate font-medium">{e.title}</div>
         <div className="mt-0.5 text-xs text-muted">{label[e.platform as keyof typeof label] ?? label.unknown}</div>
       </div>
-      {e.meetingUrl && e.platform === "meet" && <RecordToggle eventId={e.id} record={e.record} />}
-      {e.meetingUrl && e.platform !== "meet" && <Badge title="Milo can only join Google Meet calls so far">Meet only for now</Badge>}
+      {canJoin(e.platform) ? <RecordToggle eventId={e.id} record={e.record} /> : <Badge title="Milo can't join this kind of call yet">Not supported yet</Badge>}
     </li>
   );
   const dayGroups = (list: typeof events) => groupByDay(list, (e) => e.startsAt).map((g) => (
@@ -92,7 +99,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ t
   return (
     <div>
       <PageHeader title={first ? `${greeting()}, ${first}` : greeting()}
-        description={events.length ? `${events.length === 50 ? "50+" : events.length} upcoming ${events.length === 1 ? "meeting" : "meetings"} on your calendar. Milo's notes land here when each one ends.` : "Your meetings, recaps and recordings in one place."}
+        description={upcoming.length ? `${upcoming.length === 50 ? "50+" : upcoming.length} upcoming ${upcoming.length === 1 ? "meeting" : "meetings"} on your calendar. Milo's notes land here when each one ends.` : "Your meetings, recaps and recordings in one place."}
         actions={actions} />
       <HomeTabs active="calls" />
       {live.length > 0 && <AutoRefresh ms={3000} />}
@@ -135,14 +142,36 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ t
               </EmptyState>
             ) : (
               <div className="card overflow-hidden">
-                <ul>{dayGroups(events.slice(0, SHOWN_UPCOMING))}</ul>
-                {events.length > SHOWN_UPCOMING && (
+                {upcoming.length === 0 ? (
+                  <p className="px-4 py-6 text-center text-sm text-muted">No meetings with a link coming up. Your calendar is synced.</p>
+                ) : (
+                  <>
+                    <ul>{dayGroups(upcoming.slice(0, SHOWN_UPCOMING))}</ul>
+                    {upcoming.length > SHOWN_UPCOMING && (
+                      <details className="group border-t border-border">
+                        <summary className="flex list-none items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-medium text-accent-ink hover:bg-raised [&::-webkit-details-marker]:hidden">
+                          <span className="group-open:hidden">Show {upcoming.length - SHOWN_UPCOMING} more</span><span className="hidden group-open:inline">Show fewer</span>
+                          <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+                        </summary>
+                        <ul className="border-t border-border">{dayGroups(upcoming.slice(SHOWN_UPCOMING))}</ul>
+                      </details>
+                    )}
+                  </>
+                )}
+                {otherEvents.length > 0 && (
                   <details className="group border-t border-border">
-                    <summary className="flex list-none items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-medium text-accent-ink hover:bg-raised [&::-webkit-details-marker]:hidden">
-                      <span className="group-open:hidden">Show {events.length - SHOWN_UPCOMING} more</span><span className="hidden group-open:inline">Show fewer</span>
-                      <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+                    <summary className="flex list-none items-center gap-2 px-4 py-2.5 text-xs text-muted hover:text-text [&::-webkit-details-marker]:hidden">
+                      <Check className="h-3.5 w-3.5 text-success" />
+                      <span className="min-w-0 flex-1 truncate">{otherEvents.length} other calendar {otherEvents.length === 1 ? "event" : "events"} synced · no meeting link, so Milo skips {otherEvents.length === 1 ? "it" : "them"}</span>
+                      <ChevronDown className="h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-180" />
                     </summary>
-                    <ul className="border-t border-border">{dayGroups(events.slice(SHOWN_UPCOMING))}</ul>
+                    <ul className="divide-y divide-border border-t border-border">
+                      {otherEvents.map((e) => (
+                        <li key={e.id} className="flex items-center gap-4 px-4 py-2 text-sm text-muted">
+                          <span className="w-32 shrink-0 tabular-nums">{whenLabel(e.startsAt)}</span><span className="truncate">{e.title}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </details>
                 )}
               </div>
@@ -153,21 +182,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ t
             {recent.length === 0 ? (
               <EmptyState icon={Video} title="No calls yet">Send Milo to a meeting or upload a recording, and the transcript, summary and action items will show up here.</EmptyState>
             ) : (
-              <ul className="card divide-y divide-border overflow-hidden">
-                {recent.map((m) => (
-                  <li key={m.id}>
-                    <Link href={`/meetings/${m.id}`} className="group flex items-center gap-3 p-3 transition-colors hover:bg-raised sm:gap-4 sm:p-4">
-                      <IconTile icon={m.captureSource === "upload" ? Upload : Video} tone="accent" />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate font-medium">{m.title}</div>
-                        <div className="mt-0.5 truncate text-sm text-muted">{whenLabel(m.createdAt)} · {m.captureSource === "upload" ? "Uploaded" : m.captureSource === "bot" ? "Recorded by Milo" : m.captureSource}</div>
-                      </div>
-                      {m.status === "ready" ? <Badge tone="success" dot>Ready</Badge> : m.status === "failed" ? <Badge tone="danger" dot>Failed</Badge> : <Badge tone="warn" dot pulse>Processing</Badge>}
-                      <ArrowRight className="hidden h-4 w-4 shrink-0 text-subtle transition-transform sm:block group-hover:translate-x-0.5 group-hover:text-text" />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+              <RecentCalls items={recent.map((m) => ({
+                id: m.id, title: m.title, upload: m.captureSource === "upload",
+                sub: `${whenLabel(m.createdAt)} · ${m.captureSource === "upload" ? "Uploaded" : m.captureSource === "bot" ? "Recorded by Milo" : m.captureSource}`,
+                status: m.status === "ready" ? "ready" as const : m.status === "failed" ? "failed" as const : "processing" as const,
+              }))} />
             )}
           </Section>
         </div>

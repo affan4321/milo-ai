@@ -2,6 +2,7 @@
 import { eq, sql } from "drizzle-orm";
 import { getDb, users, meetings, ensureWorkspace } from "@milo/db";
 import { createPlaylist, renamePlaylist, deletePlaylist, listPlaylists, addToPlaylist, removeItem, moveItem, getPlaylist, MAX_PLAYLISTS } from "@milo/playlists";
+import { assertTestDatabase } from "@milo/db"; assertTestDatabase(); // never run these against the hosted database
 
 let fails = 0; const check = (c: unknown, m: string) => { console.log(c ? "  ok  " : "  FAIL", m); if (!c) fails++; };
 const db = getDb(), stamp = Date.now();
